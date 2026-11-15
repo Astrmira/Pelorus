@@ -1,0 +1,8 @@
+% 第七章：结论（精修投稿版）
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented \textbf{\rquiver{}}, a warped-product graph index for hyperbolic search on $\Bball$ and $\Lmod$.
+Factoring points into unquantized FP32 radial/conformal scalars ($32$\,B header) and scale-invariant 2-bit {SM} spherical codes keeps directional error out of singular boundary denominators while compressing logical navigation state to $352$\,B/vertex ($485.0$\,MB split or $517.0$\,MB page-co-located at $N=10^6$).
+Pairing conformal and {Vamana} analysis with purity-gated zero-byte-per-vertex tangent-cone residuals, {QuadriPrune}, chord-swap repair, radial-minimizer routing, $4096$\,B \texttt{HotSmPage} co-location, and orthogonal-projection refinement yields $5.44\times$ faster builds, $2.60\times$ smaller memory than 8-bit polar codes, $4.30\times$/$6.31\times$ (1T/24T) higher $99\%$-recall QPS than {Polar-FP32} on {Cohere-1M}, $53{,}483$\,QPS on {MERU-1M} ($3.37\times$--$3.88\times$ over {HyperspaceDB} FP32), and {Clustered-Narrow} recall rising from $34.22\%$ to $99.385\%$ at $L=256$ ($99.80\%$ at $L=384$).
+On isotropic {Uniform-Narrow}, \rquiver{} ($16/128$) peaks at $64.735\%$ Recall@10 versus $92.17\%$ for {HyperspaceDB} ($32/256$), measuring a topology--budget trade-off on unclustered narrow shells. All four real datasets activate zero residual cones and use global directional codes.

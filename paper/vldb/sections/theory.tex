@@ -9,7 +9,7 @@ We analyze both the stochastic comparison error of the polar proxy $\widehat{P}_
 \label{subsec:non_cancellation}
 
 Write the directional estimation error for any pair $(u_q, u_v)$ as $\varepsilon_\angle(q, v) \triangleq \hat{\gamma}(u_q, u_v) - \gamma_{qv}$.
-Under symmetric two-sided quantization $\hat{\gamma}_{\mathrm{sym}}(u_q, u_v)$ with directional residuals $\hat{u}_z / \sigma_z - u_z = e_z$, Bussgang-style bilinear decomposition~\cite{bussgang1952crosscorrelation,xiao2026decisions} expands $\varepsilon_\angle(q, v)$ into
+For the normalized bilinear score $\langle\hat u_q/\sigma_q,\hat u_v/\sigma_v\rangle$, define directional residuals $\hat{u}_z / \sigma_z - u_z = e_z$, the bilinear error decomposition~\cite{bussgang1952crosscorrelation,xiao2026decisions} is
 \begin{equation}
   \varepsilon_\angle(q, v)
   = \underbrace{\langle e_q, u_v\rangle}_{\eta_q(u_v)}
@@ -17,13 +17,13 @@ Under symmetric two-sided quantization $\hat{\gamma}_{\mathrm{sym}}(u_q, u_v)$ w
   + \underbrace{\langle e_q, e_v\rangle}_{\xi_{qv}},
   \label{eq:bilinear_error}
 \end{equation}
-where $\eta_q(u_v)$ is the first-order query projection, $\eta_v(u_q)$ is the first-order candidate projection, and $\xi_{qv}$ is the second-order cross residual.
-In flat cosine ranking ($W \equiv 1$), comparing angularly close candidates $u_x, u_y$ subtracts $\eta_q(u_x) - \eta_q(u_y) = \langle e_q, u_x - u_y\rangle$, cancelling query quantization noise to $O(\|u_x - u_y\|_2 / \sqrt{D})$~\cite{xiao2026decisions}.
+The calibrated score~\eqref{eq:sm_calibration} applies its rational map after this bilinear product. Here $\eta_q(u_v)$ is the first-order query projection, $\eta_v(u_q)$ is the first-order candidate projection, and $\xi_{qv}$ is the second-order cross residual.
+In flat cosine ranking ($W \equiv 1$), comparing angularly close candidates $u_x, u_y$ subtracts $\eta_q(u_x) - \eta_q(u_y) = \langle e_q, u_x - u_y\rangle$, with variance $(u_x-u_y)^\top\Sigma_q(u_x-u_y)$ for $\Sigma_q=\Cov(e_q)$. The scaling $\|\Sigma_q\|_2=O(1/D)$ gives standard deviation $O(\|u_x-u_y\|_2/\sqrt D)$~\cite{xiao2026decisions}.
 On $\Bball$, conformal radial weights reshape this behavior in four distinct ways.
 
 \begin{theorem}[Conformal Flip Criterion, Depth Invariance, and Lorentz-MIPS Blowup]
 \label{thm:conformal_flip}
-Let $q, x, y \in \Bball$ ($r_q > 0$) satisfy $P_{\mathbb{B}}(q, x) < P_{\mathbb{B}}(q, y)$ with true proxy margin $\Delta_P(q; x, y) \triangleq P_{\mathbb{B}}(q, y) - P_{\mathbb{B}}(q, x) > 0$, where radial scalars $(r_z, f_z)$ are stored exactly. Then:
+Let $q, x, y \in \Bball$ ($r_q > 0$) satisfy $P_{\mathbb{B}}(q, x) < P_{\mathbb{B}}(q, y)$ with true proxy margin $\Delta_P(q; x, y) \triangleq P_{\mathbb{B}}(q, y) - P_{\mathbb{B}}(q, x) > 0$, with real-valued radial scalars $(r_z,f_z)$. \ifpreprint Implementation rounding is quantified in Appendix~\ref{app:scalar_rounding}.\fi Then
 \begin{enumerate}
   \item \textbf{Exact flip criterion and query boundary-depth invariance:}
   An approximate proxy inversion $\widehat{P}_{\mathbb{B}}(q, y) \le \widehat{P}_{\mathbb{B}}(q, x)$ occurs if and only if
@@ -35,20 +35,20 @@ Let $q, x, y \in \Bball$ ($r_q > 0$) satisfy $P_{\mathbb{B}}(q, x) < P_{\mathbb{
   When $x, y$ lie on an \emph{isobathic shell} ($r_x = r_y = r > 0$),~\eqref{eq:exact_flip_criterion} simplifies to $\varepsilon_\angle(q, y) - \varepsilon_\angle(q, x) \ge \gamma_{qx} - \gamma_{qy}$: both $f_q$ and $f_x$ cancel identically, rendering same-shell flip probabilities completely invariant to query and candidate boundary proximity ($f_q, f_x \to \infty$).
 
   \item \textbf{Cross-shell query-noise non-cancellation:}
-  Under symmetric quantization~\eqref{eq:bilinear_error}, the ranking perturbation $\Delta\widehat{\Psi}_{\mathrm{rank}}(q; x, y) = \widehat{P}_{\mathbb{B}}(q, x) - \widehat{P}_{\mathbb{B}}(q, y) - \Psi_{\mathrm{rank}}(q; x, y)$ contains an uncancelled query term $d_q(r_q; r_x, r_y)\,\eta_q(u_x)$ with $d_q(r_q; r_x, r_y) = W(r_q, r_y) - W(r_q, r_x)$.
-  Under an isotropic query-residual scaling model $\Cov(e_q) = \frac{\kappa_q}{D}(I_D - u_q u_q^\top)$, even identical angular rays ($u_x = u_y$) suffer query-induced variance
+  For the bilinear error~\eqref{eq:bilinear_error}, the ranking perturbation $\Delta\widehat{\Psi}_{\mathrm{rank}}(q; x, y) = \widehat{P}_{\mathbb{B}}(q, x) - \widehat{P}_{\mathbb{B}}(q, y) - \Psi_{\mathrm{rank}}(q; x, y)$ contains an uncancelled query term $d_q(r_q; r_x, r_y)\,\eta_q(u_x)$ with $d_q(r_q; r_x, r_y) = W(r_q, r_y) - W(r_q, r_x)$.
+  For arbitrary $\Sigma_q=\Cov(e_q)$, this first-order query term at $u_x=u_y$ has variance $d_q^2u_x^\top\Sigma_q u_x$. Specializing to $\Sigma_q=\frac{\kappa_q}{D}(I_D-u_qu_q^\top)$ gives
   \begin{equation}
     \begin{aligned}
-      &\Var_{e_q}\!\bigl(\Delta\widehat{\Psi}_{\mathrm{rank}} \mid u_x = u_y\bigr) \\
+      &\Var_{e_q}\!\bigl(d_q\eta_q(u_x)\mid u_x=u_y\bigr) \\
       &\quad= \frac{4\kappa_q}{c^2 D}\sinh^2\rho_q
         \bigl(\sinh\rho_y - \sinh\rho_x\bigr)^2(1 - \gamma_{qx}^2),
     \end{aligned}
     \label{eq:cross_shell_var}
   \end{equation}
-  which grows as $\Theta(e^{2\rho_q + 2\max(\rho_x,\rho_y)} / D)$, shrinks quadratically as $O(\delta_\rho^2 W^2)$ inside an isobathic band $|\rho_y - \rho_x| \le \delta_\rho$, and vanishes identically across all shells when $q$ is unquantized ($e_q = 0$).
+  For fixed nonzero shell gap and $1-\gamma_{qx}^2>0$, this expression grows as $\Theta(e^{2\rho_q+2\max(\rho_x,\rho_y)}/D)$ at large depths. Inside a deep-shell band of width $\delta_\rho$, its weight mismatch is $O(\delta_\rho^2W^2)$. An unquantized query sets $e_q=0$ in pool re-scoring.
 
-  \item \textbf{Suboptimality of direct $(D+1)$-D {Lorentz}-MIPS quantization:}
-  Directly quantizing spatial coordinates $\tilde{z} = \frac{1}{\sqrt{c}}\sinh\rho_z\,u_z \in \R^D$ on $\Lmod$ to approximate the {Lorentz} inner product $-z_0 z'_0 + \langle \tilde{z}, \tilde{z}'\rangle$ without polar norm separation incurs coordinate error standard deviation $\Theta(\frac{1}{c\sqrt{D}}\sinh\rho_q\sinh\rho_v)$ even at $\theta_{qv} = 0$, preventing radial pre-filtering and destroying zero-error radial comparisons when $u_x = u_y$\ifpreprint\ (complete proof in Appendix~\ref{app:conformal_flips})\fi.
+  \item \textbf{Spatial {Lorentz}-MIPS quantization scaling:}
+  Under a spatial-error model $\Cov(\epsilon_v)=\Theta(\|\tilde z_v\|_2^2/D)I_D$, directly quantizing spatial coordinates $\tilde{z} = \frac{1}{\sqrt{c}}\sinh\rho_z\,u_z \in \R^D$ on $\Lmod$ to approximate the {Lorentz} inner product $-z_0 z'_0 + \langle \tilde{z}, \tilde{z}'\rangle$ without polar norm separation incurs coordinate error standard deviation $\Theta(\frac{1}{c\sqrt{D}}\sinh\rho_q\sinh\rho_v)$ even at $\theta_{qv} = 0$, giving nonzero spatial inner-product variance on aligned rays. Polar storage supplies the scalar radial lower bound independently of directional evaluation\ifpreprint\ (complete proof in Appendix~\ref{app:conformal_flips})\fi.
 \end{enumerate}
 \end{theorem}
 
@@ -56,10 +56,10 @@ Let $q, x, y \in \Bball$ ($r_q > 0$) satisfy $P_{\mathbb{B}}(q, x) < P_{\mathbb{
 Because $R(r_q, r_v)$ and $W(r_q, r_v) = 2 r_q r_v f_q f_v$ are exact, $\widehat{P}_{\mathbb{B}}(q, v) - P_{\mathbb{B}}(q, v) = -2 r_q f_q r_v f_v \varepsilon_\angle(q, v)$.
 Substituting this into $\widehat{P}_{\mathbb{B}}(q, y) - \widehat{P}_{\mathbb{B}}(q, x) \le 0$ and dividing by $2 r_q f_q > 0$ gives~\eqref{eq:exact_flip_criterion}; setting $r_x = r_y$ cancels $r_x f_x$ against $\Delta_P = 2 r_q r_x f_q f_x(\gamma_{qx} - \gamma_{qy})$.
 Adding and subtracting $W(r_q, r_y)\eta_q(u_x)$ in~\eqref{eq:bilinear_error} isolates $d_q\,\eta_q(u_x)$ and yields~\eqref{eq:cross_shell_var}.
-On $\Lmod$, any unseparated quantizer applied to $\tilde{z}_v$ scales quantization step size by $\|\tilde{z}_v\|_2 = c^{-1/2}\sinh\rho_v$, injecting $\Theta(e^{\rho_q + \rho_v}/\sqrt{D})$ noise even along radial lines where polar $R(r_q, r_v)$ is exact.
+Under the stated spatial-error model on $\Lmod$, a quantizer applied to $\tilde{z}_v$ scales quantization step size by $\|\tilde{z}_v\|_2 = c^{-1/2}\sinh\rho_v$, injecting $\Theta(e^{\rho_q + \rho_v}/\sqrt{D})$ noise even along radial lines where polar $R(r_q, r_v)$ is exact.
 \end{proof}
 
-Theorem~\ref{thm:conformal_flip} establishes why \rquiver{} projects $\Lmod \to \Bball$ at ingestion, keeps $(r_v, f_v)$ exact, isolates lateral graph edges inside isobathic shells $|\rho_v - \rho_u| \le \delta_\rho$, and applies an unquantized-query refinement pass (\textsc{Stage-0.5}) before cross-shell truncation.
+Theorem~\ref{thm:conformal_flip} establishes why \rquiver{} projects $\Lmod \to \Bball$ at ingestion, stores $(r_v,f_v)$ as unquantized FP32 scalars, isolates lateral graph edges inside isobathic shells $|\rho_v - \rho_u| \le \delta_\rho$, and applies an unquantized-query refinement pass (\textsc{Stage-0.5}) before cross-shell truncation.
 
 \subsection{Hyperbolic Vamana Pathologies: Occlusion, Wells, and Bias}
 \label{subsec:vamana_pathologies}
@@ -86,10 +86,10 @@ Let $\Bball$ have curvature $-c < 0$ and {Vamana} pruning slack $\alpha > 1$.
     \gamma_{qv} > \gamma_{\mathrm{esc}}(R_q, R_v) \triangleq \frac{\tanh(\sqrt{c}\,R_v / 2)}{\tanh(\sqrt{c}\,R_q)}.
     \label{eq:escape_cap}
   \end{equation}
-  Outside this spherical cap, greedy geodesic routing descends into $R_v \to 0$, where $\sinh(\sqrt{c}R_v) \to 0$ extinguishes angular sensitivity.
+  Outside this cap, $v$ fails to improve on the origin. Angular sensitivity vanishes along inward rays as $\sinh(\sqrt c R_v)\to0$.
 
   \item \textbf{Offset-intercept and proxy non-homogeneity bias:}
-  Replacing true geodesic slack $\alpha\,d_{\mathbb{B}}(w, v) \le d_{\mathbb{B}}(u, v)$ with an offset surrogate $\hat{d}(x, y) = a\,\tilde{d}(x, y) + b$ ($b \ne 0$, such as raw Hamming or $4D - \langle \tilde{q}_x, \tilde{q}_y\rangle$) injects a deterministic pruning bias $(1 - \alpha)b \ne 0$, while applying linear slack directly to $P_{\mathbb{B}}$ ($\alpha P_{\mathbb{B}}(w, v) \le P_{\mathbb{B}}(u, v)$) under-prunes deep shells because $\arccosh(1 + \frac{c}{2}P)$ transitions from $\Theta(\sqrt{P})$ at $P \ll 1$ to $\Theta(\ln P)$ at $P \gg 1$\ifpreprint\ (complete proofs in Appendix~\ref{app:vamana_pathologies})\fi.
+  Replacing geodesic distance with an affine surrogate $\hat{d}=a d+b$, $a>0$, gives pruning margin $a[d(u,v)-\alpha d(w,v)]+(1-\alpha)b$. Positive $b$ produces under-pruning and negative $b$ produces over-pruning. Direct linear proxy slack $\alpha P_{\mathbb{B}}(w,v)\le P_{\mathbb{B}}(u,v)$ over-prunes relative to geodesic slack, whose proxy threshold is $P_\alpha(P)=\frac{2}{c}[\cosh(\alpha\arccosh(1+cP/2))-1]>\alpha P$ for $P>0$\ifpreprint\ (complete proofs in Appendix~\ref{app:vamana_pathologies})\fi.
 \end{enumerate}
 \end{theorem}
 
@@ -123,50 +123,46 @@ Decomposing $u_q = \alpha_{q,c}\mu_c + \beta_{q,c}\tilde{r}_{q,c}$ splits $\gamm
   \label{eq:tangent_inner}
 \end{equation}
 
-\begin{theorem}[Conformal Margin Collapse, Tangent-Cone Recovery, and Pool-Dilution Inversion]
+\begin{theorem}[Tangent-Cone Error Propagation and Fixed-Budget Admission]
 \label{thm:tangent_cone}
-Consider same-shell candidates $x, y$ ($r_x = r_y = r$, weight $W = W(r_q, r)$) in cone $\mu_c$ with $\alpha_x = \alpha_y = \alpha = \sqrt{1 - \beta^2}$ ($\beta \in (0, 1)$) and unit tangent separation $\Delta_{\tilde{r}} = \langle \tilde{r}_{q,c}, \tilde{r}_y - \tilde{r}_x\rangle \ne 0$, under an isotropic 2-bit {SM} directional-variance scaling model $\kappa_{\mathrm{SM}}/D$. Then:
+Consider same-shell candidates $x,y$ with weight $W=W(r_q,r)>0$, common $\alpha=\sqrt{1-\beta^2}$, and $\beta,\beta_{q,c}>0$. Set $\Delta_{\tilde r}=\langle\tilde r_{q,c},\tilde r_y-\tilde r_x\rangle\ne0$. Variances below use a conditional error model with fixed displayed geometric quantities and zero-mean estimation errors.
 \begin{enumerate}
-  \item \textbf{Global {SM} margin collapse:}
-  Quantizing $u_x, u_y$ directly in ambient coordinates yields true margin $|\Psi_{\mathrm{rank}}(q; x, y)| = W\beta_{q,c}\beta\,|\Delta_{\tilde{r}}|$ but ambient noise $\Theta(W\sqrt{\kappa_{\mathrm{SM}}/D})$ when $\beta \ll 1$, driving
+  \item \textbf{Pairwise margin and covariance:}
+  The true margin is $W\beta_{q,c}\beta|\Delta_{\tilde r}|$. For global cosine errors $g_x,g_y$, define $V_g=\Var(g_y)+\Var(g_x)-2\Cov(g_y,g_x)$. For $V_g>0$,
   \begin{equation}
-    \MNR_{\mathrm{global}}(q; x, y) = \Theta\!\left(\sqrt{\frac{D}{\kappa_{\mathrm{SM}}}}\,\beta_{q,c}\beta\,|\Delta_{\tilde{r}}|\right) \xrightarrow{\;\beta \to 0\;} 0.
+    \MNR_{\mathrm{global}}=\frac{\beta_{q,c}\beta|\Delta_{\tilde r}|}{\sqrt{V_g}}.
     \label{eq:mnr_collapse}
   \end{equation}
+  Thus margin collapse occurs when $\sqrt{V_g}/(\beta_{q,c}\beta|\Delta_{\tilde r}|)\to\infty$.
 
-  \item \textbf{Fixed-budget pool-dilution recall inversion:}
-  Suppose cone $c$ contains $M_c > B$ vertices and beam search of width $L$ collects $N_c(L) \in [B, M_c]$ intra-cluster vertices ($N_c(L)$ non-decreasing in $L$) including $k_{\mathrm{vis}}$ true top-$k$ neighbors.
-  In the collapsed-margin limit $\MNR_{\mathrm{global}} \to 0$ where intra-cluster proxy tie-breaking approaches a uniform random permutation, expected retention of visited true neighbors in a fixed top-$B$ rerank window equals $k_{\mathrm{vis}} \cdot \frac{B}{N_c(L)}$, which \emph{strictly decreases} whenever $N_c(L)$ grows faster than $k_{\mathrm{vis}}$.
+  \item \textbf{Fixed-budget admission under exchangeable ranks:}
+  Suppose the retained pool contains $N_c(L)\ge B$ cone members, including $k_c(L)$ true neighbors, and all $B$ rerank slots are selected from these members. If their score ranks form a uniform permutation conditional on this pool, expected true-neighbor admission is $k_c(L)B/N_c(L)$. It decreases between two widths exactly when $k_c(L)/N_c(L)$ decreases.
 
-  \item \textbf{Local tangent-cone recovery without global rotation:}
-  Storing $\alpha_v$ in FP32 and quantizing only the normalized tangent residual $\tilde{r}_v \in T_{\mu_c}\Sunit$ via
+  \item \textbf{Exact tangent-error attenuation:}
+  With real-valued axial scalars, use
   \begin{equation}
     \hat{\gamma}_{\mathrm{cone}}(q, v) \triangleq \alpha_{q,c}\alpha_v + \beta_{q,c}\beta_v\,\hat{\gamma}_{\mathrm{asym}}(\tilde{r}_{q,c}, \tilde{r}_v)
     \label{eq:cone_estimator}
   \end{equation}
-  attenuates quantization noise by $\beta_{q,c}\beta$, yielding $\sqrt{\Var(\Delta\widehat{\Psi}_{\mathrm{cone}})} = \sqrt{2\kappa_{\mathrm{SM}}/D}\,W\beta_{q,c}\beta$ and restoring scale-free {$\MNR$}:
+  and let $e_v=\hat\gamma_{\mathrm{asym}}(\tilde r_{q,c},\tilde r_v)-\langle\tilde r_{q,c},\tilde r_v\rangle$. Then cosine error equals $\beta_{q,c}\beta_v e_v$ pointwise. Set $V_r=\Var(e_y)+\Var(e_x)-2\Cov(e_y,e_x)$. For $V_r>0$,
   \begin{equation}
     \begin{aligned}
-      \MNR_{\mathrm{cone}}(q; x, y)
-      &= \sqrt{\frac{D}{2\kappa_{\mathrm{SM}}}}\,|\Delta_{\tilde{r}}|, \\
+      \MNR_{\mathrm{cone}}&=\frac{|\Delta_{\tilde r}|}{\sqrt{V_r}},\\
       \frac{\MNR_{\mathrm{cone}}}{\MNR_{\mathrm{global}}}
-      &= \Theta\!\left(\frac{1}{\beta_{q,c}\beta}\right).
+      &=\frac{\sqrt{V_g}}{\beta_{q,c}\beta\sqrt{V_r}}.
     \end{aligned}
     \label{eq:mnr_recovery}
   \end{equation}
+  Under equal residual variances $\kappa_{\mathrm{SM}}/D$ and pair correlation $\varrho<1$, $V_r=2\kappa_{\mathrm{SM}}(1-\varrho)/D$.
   \ifpreprint(Proof in Appendix~\ref{app:tangent_cone}.)\fi
 \end{enumerate}
 \end{theorem}
 
 \begin{proof}[Proof Sketch]
-In~\eqref{eq:psi_rank}, $\alpha_{q,c}\alpha$ cancels between $x$ and $y$, leaving $|\Psi_{\mathrm{rank}}| = W\beta_{q,c}\beta|\Delta_{\tilde{r}}|$.
-Under ambient quantization, $\tau(u_v) \to \alpha\tau(\mu_c)$ as $\beta \to 0$, so non-crossing coordinates retain $\Theta(1/D)$ quantization variance independent of $\beta$, giving~\eqref{eq:mnr_collapse}.
-When $\MNR_{\mathrm{global}} \to 0$, all $N_c(L)$ intra-cluster pool entries share concentrated axial score $R + W(1 - \alpha_{q,c}\alpha)$ perturbed by i.i.d.\ noise much larger than $W\beta_{q,c}\beta$, so selecting the smallest $B$ noisy scores samples $B$ of $N_c(L)$ intra-cluster items near-uniformly, retaining fraction $B / N_c(L)$.
-Under~\eqref{eq:cone_estimator}, $\hat{\gamma}_{\mathrm{cone}}(q, v) - \gamma_{qv} = \beta_{q,c}\beta\langle \tilde{r}_{q,c}, \tilde{e}_v\rangle$, cancelling $W\beta_{q,c}\beta$ identically in~\eqref{eq:mnr_recovery}.
+Subtracting~\eqref{eq:tangent_inner} for $x,y$ cancels the axial term. Applying $\Var(X-Y)=\Var(X)+\Var(Y)-2\Cov(X,Y)$ gives $W^2V_g$ for global proxy-error variance and $W^2\beta_{q,c}^2\beta^2V_r$ for residual proxy-error variance. Uniform ranks give each cone member admission probability $B/N_c(L)$. Summing indicators over its $k_c(L)$ true neighbors proves Claim~(2).
 \end{proof}
 
-Theorem~\ref{thm:tangent_cone} explains both why {Clustered-Narrow} ($N=1\text{M}$) exhibits non-monotonic recall degradation ($34.2\% \to 27.8\%$) as $L$ increases from $256$ to $2{,}048$ at fixed $B=128$, and why local tangent-cone encoding---unlike ambient scalar centering~\cite{aguerrebere2023similarity}, flat anisotropic codebooks~\cite{guo2020accelerating}, or global random rotations~\cite{gao2024rabitq,gao2025extendedrabitq} that perturb structured contrastive embeddings~\cite{wang2020understanding,betser2026infonce,xiao2026decisions}---lifts its recall above $99.4\%$ ($99.8\%$ at $L=384$ and $99.95\%$ peak) at zero per-vertex byte overhead.
-Although $B / N_c(L)$ pool dilution under collapsed margins is a general fixed-budget ranking mechanism in tight-cluster quantized search (exacerbated in $\Bball$ by boundary-cone concentration and conformal weighting), local tangent-cone encoding maps residual normalization~\cite{jegou2011pq} directly into the existing 2-bit sphere bitplanes without extra per-vertex bytes.
+On synthetic {Clustered-Narrow}, increasing $L$ from $256$ to $2{,}048$ at $B=128$ reduces global-code recall from $34.22\%$ to $27.80\%$. The four-stage audit in \S\ref{subsec:eval_synthetic} measures beam retention and rerank admission directly. Tangent encoding raises recall to $99.385\%$ at $L=256$, $99.80\%$ at $L=384$, and $99.945\%$ peak. It maps residual normalization~\cite{jegou2011pq} into the existing 2-bit bitplanes. Equation~\eqref{eq:mnr_recovery} identifies the pairwise covariance and tangent scale governing this representation.
 
 \subsection{Strong Convexity and Closed-Form Radial Minimization}
 \label{subsec:geodesic_apex}
@@ -183,10 +179,10 @@ Let $q \in \Bball$ have radius $r_q$, conformal factor $f_q$, and depth $\rho_q 
     P_{\mathbb{B}}(q, v) \ge P_{\mathrm{rad}}(r_q, r_v) \triangleq (r_q - r_v)^2 f_q f_v = \frac{2}{c}\bigl(\cosh|\rho_q - \rho_v| - 1\bigr),
     \label{eq:radial_lb}
   \end{equation}
-  enabling zero-false-negative pruning in three FP32 multiplications.
+  giving the radial lower bound used by the header gate. \ifpreprint Appendix~\ref{app:scalar_rounding} gives its FP32 perturbation bound.\fi
 
   \item \textbf{Strong convexity and closed-form radial minimizer:}
-  Along any directional ray $\{v(\rho) : \rho \in \R\}$ with cosine alignment $\gamma = \langle u_q, \mu_a\rangle$, the hyperbolic cosine objective $g_\gamma(\rho) \triangleq \cosh(\sqrt{c}\,d_{\mathbb{B}}(q, v(\rho))) = \cosh\rho_q\cosh\rho - \gamma\sinh\rho_q\sinh\rho$ is strictly $1$-strongly convex on $\R$ ($g_\gamma''(\rho) = g_\gamma(\rho) \ge \cosh(\rho_q - \rho) \ge 1$) and attains its unique minimizer on $[0, \infty)$ at
+  Along any directional ray $\{v(\rho) : \rho \in \R\}$ with cosine alignment $\gamma = \langle u_q, \mu_a\rangle$, the hyperbolic cosine objective $g_\gamma(\rho) \triangleq \cosh(\sqrt{c}\,d_{\mathbb{B}}(q, v(\rho))) = \cosh\rho_q\cosh\rho - \gamma\sinh\rho_q\sinh\rho$ is strictly $1$-strongly convex on $\R$ ($g_\gamma''(\rho) = g_\gamma(\rho) \ge \cosh(\rho_q - |\rho|) \ge 1$) and attains its unique minimizer on $[0, \infty)$ at
   \begin{equation}
     \rho^*(\rho_q, \gamma) = \atanh\bigl(\tanh\rho_q \cdot \max(\gamma, 0)\bigr),
     \label{eq:geodesic_apex}
@@ -197,7 +193,7 @@ Let $q \in \Bball$ have radius $r_q$, conformal factor $f_q$, and depth $\rho_q 
 
 \begin{proof}[Proof Sketch]
 Claim~(1) follows from $\gamma_{qv} \le 1$ in~\eqref{eq:polar_proxy}.
-Differentiating $g_\gamma(\rho)$ twice yields $g_\gamma''(\rho) = g_\gamma(\rho) \ge \cosh\rho_q\cosh\rho - \sinh\rho_q\sinh\rho = \cosh(\rho_q - \rho) \ge 1$.
+Differentiating $g_\gamma(\rho)$ twice yields $g_\gamma''(\rho) = g_\gamma(\rho) \ge \cosh\rho_q\cosh|\rho| - \sinh\rho_q\sinh|\rho| = \cosh(\rho_q - |\rho|) \ge 1$.
 Setting $g_\gamma'(\rho) = \cosh\rho_q\sinh\rho - \gamma\sinh\rho_q\cosh\rho = 0$ gives $\tanh\rho = \gamma\tanh\rho_q$ for $\gamma > 0$ and boundary minimum $\rho^* = 0$ for $\gamma \le 0$; clamping follows by strict convexity.
 \end{proof}
 
@@ -206,7 +202,7 @@ Unlike Euclidean space, for a coarse routing cone at $\gamma = 0.7$ and a deep q
 \subsection{Deterministic Asymmetric De-Biasing, CJ-Gate, and Sketch Variance}
 \label{subsec:asym_cj}
 
-Finally, we derive three exact estimators governing candidate-pool refinement, plateau expansion, and 256-bit sketch filtering.
+Finally, we derive an algebraic estimator and two uncertainty models governing candidate-pool refinement, plateau expansion, and 256-bit sketch filtering.
 
 \begin{proposition}[Deterministic Orthogonal-Projection Estimator, Off-Axis {CJ-Gate}, and Sketch Variance]
 \label{prop:asym_cj_gate}
@@ -232,7 +228,7 @@ Let $\hat{u}_v$ be the two-level {SM} vector of $u_v \in \Sunit$ with Pythagorea
   Using $\beta_v^2$ in place of $\beta_{q,c}\beta_v$ underestimates $\sigma_P(q, v)$ by factor $\beta_{q,c} / \beta_v$ on off-axis queries (up to $5.49\times$ when $\alpha_v = 0.995, \alpha_{q,c} = 0.84$).
 
   \item \textbf{Binomial sketch variance ratio:}
-  For a $B_s$-bit sign sketch ($B_s = 256$) at observed Hamming distance $H = B_s p$ with arcsine cosine estimate $\hat{\gamma}_{B_s}(H) = \cos(\pi p)$, first-order delta propagation of $H \sim \operatorname{Binomial}(B_s, p)$ yields standard deviation $\sigma_{\mathrm{sk}}(p) = \frac{\pi}{\sqrt{B_s}}\sin(\pi p)\sqrt{p(1 - p)}$, which inflates by up to $2.26\times$ in the near-orthogonal regime ($H \approx 115, \hat{\gamma} \approx 0.16$) relative to high-similarity neighbors ($H_{\mathrm{ref}} = 48, \hat{\gamma} \approx 0.83$)\ifpreprint\ (derivations in Appendix~\ref{app:tangent_cone})\fi.
+  For a $B_s$-bit sign sketch ($B_s = 256$) at observed Hamming distance $H = B_s p$ with arcsine cosine estimate $\hat{\gamma}_{B_s}(H) = \cos(\pi p)$, first-order delta propagation of $H \sim \operatorname{Binomial}(B_s, p)$ yields standard deviation $\sigma_{\mathrm{sk}}(p) = \frac{\pi}{\sqrt{B_s}}\sin(\pi p)\sqrt{p(1 - p)}$, whose ratio reaches $2.306\times$ at $H=128$ ($\hat\gamma=0$) and $2.265\times$ at $H=115$ ($\hat\gamma\approx0.16$) relative to high-similarity neighbors ($H_{\mathrm{ref}} = 48, \hat{\gamma} \approx 0.83$)\ifpreprint\ (derivations in Appendix~\ref{app:tangent_cone})\fi.
 \end{enumerate}
 \end{proposition}
 

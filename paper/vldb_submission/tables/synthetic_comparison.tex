@@ -1,0 +1,28 @@
+% 四种合成极端双曲分布外部对照并排总表（单行同时展示 1T 与 24T 全阈值吞吐）
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}llrrrrrrrrrrrrrr@{}}
+\toprule
+& & & \textbf{Build} & \textbf{Peak} & \multicolumn{5}{c}{\textbf{1-Thread QPS at Recall@10}} & \textbf{p99} & \multicolumn{5}{c}{\textbf{24-Thread QPS at Recall@10}} \\
+\cmidrule(lr){6-10}\cmidrule(lr){12-16}
+\textbf{Dataset} & \textbf{Method} & \textbf{$M/L_c$} & \textbf{32T\,(s)} & \textbf{Rec@10} & \textbf{$\ge90\%$} & \textbf{$\ge95\%$} & \textbf{$\ge98\%$} & \textbf{$\ge99\%$} & \textbf{$\ge99.5\%$} & \textbf{(ms)} & \textbf{$\ge90\%$} & \textbf{$\ge95\%$} & \textbf{$\ge98\%$} & \textbf{$\ge99\%$} & \textbf{$\ge99.5\%$} \\
+\midrule
+Uniform-Narrow & Pelorus$^\dagger$ & 16/128 & \textbf{46.8} & 64.735\% & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing \\
+ & HDB FP32 flat & 32/256 & 478.2 & \textbf{92.170\%} & \textbf{18} & \missing & \missing & \missing & \missing & \missing & \textbf{288} & \missing & \missing & \missing & \missing \\
+ & Faiss centered IP & 32/256 & 311.3 & 29.860\% & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & 32/256 & 573.6 & 46.445\% & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing \\
+\midrule
+Uniform-Wide & \textbf{Pelorus}$^\dagger$ & 16/128 & \textbf{31.9} & \textbf{98.880\%} & \textbf{639} & \textbf{397} & \textbf{300} & \missing & \missing & \missing & \textbf{9,363} & \textbf{9,363} & \textbf{6,739} & \missing & \missing \\
+ & HDB FP32 flat & 32/256 & 299.6 & 97.860\% & 241 & 103 & \missing & \missing & \missing & \missing & 1,727 & 1,072 & \missing & \missing & \missing \\
+ & Faiss centered IP & 32/256 & 140.1 & 48.640\% & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & 32/256 & 255.1 & 54.040\% & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing \\
+\midrule
+Clustered-Narrow & \textbf{Pelorus}$^\ddagger$ & 16/128 & \textbf{25.3} & 99.945\% & \textbf{3,371} & \textbf{2,875} & \textbf{2,092} & \textbf{1,840} & \textbf{1,551} & \textbf{0.67} & \textbf{55,231} & \textbf{55,231} & \textbf{44,175} & \textbf{38,876} & \textbf{33,132} \\
+ & HDB FP32 flat & 32/256 & 106.4 & \textbf{99.950\%} & 1,568 & 1,315 & 1,133 & 998 & 998 & 1.33 & 17,024 & 17,024 & 14,483 & 13,311 & 13,311 \\
+ & Faiss centered IP & 32/256 & 35.2 & 21.245\% & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & 32/256 & 146.8 & 19.525\% & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing \\
+\midrule
+Clustered-Wide & \textbf{Pelorus}$^\ddagger$ & 16/128 & \textbf{19.4} & \textbf{99.995\%} & \textbf{4,113} & \textbf{3,572} & \textbf{3,141} & \textbf{2,704} & \textbf{2,704} & \textbf{0.44} & \textbf{72,780} & \textbf{72,780} & \textbf{70,801} & \textbf{57,144} & \textbf{57,144} \\
+ & HDB FP32 flat & 32/256 & 73.7 & 99.500\% & 1,037 & 908 & 735 & 735 & 645 & 2.14 & 15,090 & 15,090 & 12,519 & 12,519 & 12,011 \\
+ & Faiss centered IP & 32/256 & 38.3 & 4.015\% & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & 32/256 & 273.7 & 9.330\% & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing & \missing \\
+\bottomrule
+\end{tabular*}

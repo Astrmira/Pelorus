@@ -20,3 +20,4 @@
 
 # 论文编译输出。
 /paper/vldb/build/
+/paper/vldb_submission/build/

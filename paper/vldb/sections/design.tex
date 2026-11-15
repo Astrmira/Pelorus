@@ -2,7 +2,14 @@
 \section{Warped-Product Representation and Graph Topology}
 \label{sec:design}
 
-Guided by Theorems~\ref{thm:conformal_flip}--\ref{thm:tangent_cone} and Proposition~\ref{prop:geodesic_apex}, \rquiver{} models the index as a \emph{warped-product fiber-bundle graph} over $\R_{\ge 0} \times_{\sinh} \Sunit$, decoupling exact radial curvature from 2-bit spherical directions in memory and separating spherical diversity edges from radial transitions during construction.
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{pelorus_geometry.png}
+  \caption{Geometric design of \rquiver{}. (a)~An origin hub exposes all-angle inner-ball occlusion and a shrinking same-shell angular cap ($\alpha=1.2$). (b)~A 32-slot example allocates 12 geodesic, 16 ring, two inward, and two outward links, with a cumulative ring cap of 28. \texttt{PolarRouter} selects ray-support entries, and chord swaps attach islands while preserving the BFS tree. (c)~Tangent encoding reuses the polar header and directional bitplanes, with cosine-error multiplier $\beta_{q,c}\beta_v$. On synthetic {Clustered-Narrow}, Recall@10 rises from $34.22\%$ to $99.385\%$ at $L=256,B=128$.}
+  \label{fig:geometry_overview}
+\end{figure*}
+
+Figure~\ref{fig:geometry_overview} summarizes the geometry and representation. Guided by Theorems~\ref{thm:conformal_flip}--\ref{thm:tangent_cone} and Proposition~\ref{prop:geodesic_apex}, \rquiver{} models the index as a \emph{warped-product fiber-bundle graph} over $\R_{\ge 0} \times_{\sinh} \Sunit$, decoupling exact radial curvature from 2-bit spherical directions in memory and separating spherical diversity edges from radial transitions during construction.
 
 \subsection{Zero-Overhead Polar Vertex Representation}
 \label{subsec:polar_layout}
@@ -10,21 +17,21 @@ Guided by Theorems~\ref{thm:conformal_flip}--\ref{thm:tangent_cone} and Proposit
 \paragraph{32-Byte \texttt{PolarNodeMeta} Header.}
 For each vertex $v \in \{0, \dots, N-1\}$, \rquiver{} stores a fixed 32-byte polar header (half a 64-byte cache line) paired with packed 2-bit {SM} bitplanes occupying $2\lceil D / 64\rceil \times 8$ bytes:
 \begin{itemize}
-  \item \emph{Exact radial scalars (12\,B):} Euclidean radius $r_v \in [0, 1/\sqrt{c})$, conformal factor $f_v = \frac{2}{1 - c r_v^2}$, and dimensionless geodesic depth $\rho_v = 2\atanh(\sqrt{c}\,r_v)$, computed in FP64 at ingestion and stored in FP32.
+  \item \emph{Unquantized radial scalars (12\,B):} Euclidean radius $r_v \in [0, 1/\sqrt{c})$, boundary factor $F_v=(1-cr_v^2)^{-1}=f_v/2$, and dimensionless geodesic depth $\rho_v = 2\atanh(\sqrt{c}\,r_v)$, computed in FP64 at ingestion and stored in FP32.
   \item \emph{Conditional-mean two-level {SM} scalars (12\,B):} weak-coordinate mean $a_v$, level step $\delta_v = b_v - a_v$, and reconstructed two-level norm $\sigma_v = \|\hat{u}_v\|_2$ in FP32 (Lemma~\ref{lem:sm_pythagorean}).
-  \item \emph{Bitpacked count/cone tag and axial/norm scalar (8\,B):} a 32-bit word packing the 20-bit strong-magnitude count $s_v$ with a 12-bit residual cone tag ($\text{cone\_id}$, with \texttt{0x0FFF} denoting global native {SM}), paired with an FP32 field storing axial alignment $\alpha_v = \langle u_v, \mu_c\rangle$ for residual-cone vertices or precomputed canonical inverse norm $(D + 8 s_v)^{-1/2}$ for global vertices (feeding canonical $\{\pm 1, \pm 3\}$ hop scoring while $(a_v, \delta_v, \sigma_v)$ feeds \textsc{Stage-0.5} with zero extra fetches).
+  \item \emph{Bitpacked count/cone tag and axial/norm scalar (8\,B):} a 32-bit word packing the 20-bit strong-magnitude count $s_v$ with a 12-bit residual cone tag ($\text{cone\_id}$, with \texttt{0x0FFF} denoting global native {SM}), paired with an FP32 field storing axial alignment $\alpha_v = \langle u_v, \mu_c\rangle$ for residual-cone vertices or precomputed canonical inverse norm $(D+3s_v)^{-1/2}$ for global vertices. The triple $(a_v,\delta_v,\sigma_v)$ supports the main conditional-mean hop scorer and \textsc{Stage-0.5}. The global inverse-norm slot supports legacy canonical paths, while residual scoring reads $\alpha_v$ and computes $\beta_v$.
 \end{itemize}
-Table~\ref{tab:node_layout} compares hot navigation memory at $D = 768$ and maximum out-degree $M_0 = 32$: \rquiver{} requires $352$\,B of logical payload per vertex ($485.0$\,MB total at $N = 10^6$ including CSR headers and router metadata), which is $2.60\times$ smaller than 8-bit polar scalar quantization ({Polar-SQ8}) and $7.35\times$ smaller than touching full FP32 vectors during traversal, while $4096$\,B \texttt{HotSmPage} co-location with \texttt{SymSketch256} ($+32$\,B/vertex) uses $517.0$\,MB total ($2.44\times$ smaller than {Polar-SQ8}).
+Table~\ref{tab:node_layout} gives the representation payload at $D=768$, $M_0=32$. Table~\ref{tab:memory_audit} reconciles this payload with the benchmark's navigation-byte counter. The measured allocation is $485.0$\,MB in split form and $517.0$\,MB with page co-location, compared with $1{,}261.0$\,MB for the measured {Polar-SQ8} implementation ($2.60\times$ and $2.44\times$ ratios) and $3{,}565.0$\,MB for {Polar-FP32} traversal.\ifpreprint\ Appendix~\ref{app:scalar_rounding} quantifies header rounding.\fi
 
 \begin{table}[t]
   \centering
-  \caption{Per-vertex hot navigation payload at $D=768, M_0=32$ ($N=1\text{M}$). Cold FP32 vectors ($3{,}072$\,B/vertex) are read only during final top-$B$ exact geodesic reranking.}
+  \caption{Per-vertex representation payload at $D=768, M_0=32$ ($N=1\text{M}$). For the 2-bit and SQ8 paths, cold FP32 vectors are read during final reranking. Allocation components appear in Table~\ref{tab:memory_audit}.}
   \label{tab:node_layout}
   \small
   \setlength{\tabcolsep}{3pt}
   \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}Xrrrr@{}}
     \toprule
-    \textbf{Representation} & \textbf{\shortstack{Polar\\Meta}} & \textbf{\shortstack{Dir.\\Code}} & \textbf{\shortstack{CSR\\Edges}} & \textbf{\shortstack{Hot\\Total}} \\
+    \textbf{Representation} & \textbf{\shortstack{Polar\\Meta}} & \textbf{\shortstack{Dir.\\Code}} & \textbf{\shortstack{Edge\\Slots}} & \textbf{\shortstack{Payload\\Total}} \\
     \midrule
     Full-Vector Nav (FP32) & 32\,B & 3,072\,B & 128\,B & 3,232\,B \\
     Polar-SQ8 (8-bit dir.) & 32\,B & 768\,B & 128\,B & 928\,B \\
@@ -33,8 +40,35 @@ Table~\ref{tab:node_layout} compares hot navigation memory at $D = 768$ and maxi
     \bottomrule
   \end{tabularx}
   \par\vspace{2pt}
-  {\footnotesize $^\dagger$Logical split layout uses $485.0$\,MB total for 1M vectors; page-aligned \texttt{HotSmPage} adds $32$\,B sketch/vertex plus page padding ($517.0$\,MB total); \texttt{ResidualConeDict} adds $0$\,B/vertex and $\le 0.50$\,MiB globally.}
+  {\footnotesize $^\dagger$Residual encoding reuses the same per-vertex slots. Its global axis dictionary occupies $4CD$ bytes for $C\le512$ axes, including $0.50$\,MiB at the measured $C=256,D=512$.}
 \end{table}
+
+\begin{table*}[t]
+ \centering
+ \caption{Byte reconciliation on {Cohere-1M}, $N=10^6$, $D=768$, $M_0=32$. Entries are decimal MB. Fixed-stride adjacency reserves 64 neighbor slots and one degree word per vertex. The logical payload in Table~\ref{tab:node_layout} includes 32 edge slots.}
+ \label{tab:memory_audit}
+ \small
+ \begin{tabular}{@{}lrrrr@{}}
+ \toprule
+ Component & 2-bit split & 2-bit page-co-located & Polar-SQ8 & Polar-FP32\\
+ \midrule
+ 32-byte polar headers & 32.000000 & \multirow{3}{*}{256.000000} & 32.000000 & 32.000000\\
+ 2-bit directional storage & 192.000000 & & 192.000000 & 192.000000\\
+ Sketch and record alignment & 0 & & 0 & 0\\
+ 32 logical edge slots, 32-bit IDs & 128.000000 & 128.000000 & 128.000000 & 128.000000\\
+ 32 reserved neighbor slots & 128.000000 & 128.000000 & 128.000000 & 128.000000\\
+ Degree word & 4.000000 & 4.000000 & 4.000000 & 4.000000\\
+ Router arrays & 0.974912 & 0.974912 & 0.974912 & 0.974912\\
+ FP64 directional inverse norms & 0 & 0 & 8.000000 & 8.000000\\
+ SQ8 directional coordinates & 0 & 0 & 768.000000 & 0\\
+ FP32 coordinates used in traversal & 0 & 0 & 0 & 3,072.000000\\
+ \midrule
+ Navigation total & 484.974912 & 516.974912 & 1,260.974912 & 3,564.974912\\
+ \bottomrule
+ \end{tabular}
+ \par\vspace{2pt}
+ {\footnotesize The SQ8/FP32 controls retain their 2-bit store and add an 8-byte inverse norm per vertex. Router arrays comprise 393,216 B cone bitplanes, 32,768 B SM parameters, 8,192 B inverse norms, 524,288 B cell representatives, 16,384 B coarse shortlists, and 64 B origin hubs. Adjacency stores forward lists in one fixed-stride array. Reverse insertions update these lists in place. The counter sums navigation-array payloads. Process RSS includes the cold vector store, ID maps, and allocator state.}
+\end{table*}
 
 \paragraph{Purity-Gated \texttt{ResidualConeDict}.}
 To realize Theorem~\ref{thm:tangent_cone}(3) without disturbing unclustered manifolds, \rquiver{} executes a deterministic cone-purity check at index build over a uniform sample of $\min(N, 8{,}192)$ vertices:
@@ -43,8 +77,8 @@ To realize Theorem~\ref{thm:tangent_cone}(3) without disturbing unclustered mani
   \item \emph{Leader seeding and two-round purity refinement:} Otherwise, a deterministic spherical leader pass collects candidate unit axes separated by cosine $< \tau_{\mathrm{lead}} = 0.91$ (capped at $1{,}024$ candidates), followed by two rounds of spherical mean refinement assigning samples with $\langle u_s, \mu_c\rangle \ge \alpha_{\min} = 0.94$.
   A cone $\mu_c$ is retained if and only if it meets minimum sample support $\operatorname{clamp}(\lfloor N_{\mathrm{samp}}/1024\rfloor, 3, 12)$ and achieves high intra-cone mean alignment $\bar{\alpha}_c \ge 0.955$.
 \end{enumerate}
-Every database vertex $v$ achieving $\alpha_v = \langle u_v, \mu_c\rangle \ge 0.94$ against its nearest retained axis stores the 2-bit {SM} code of its normalized tangent residual $\tilde{r}_v = (u_v - \alpha_v\mu_c)/\sqrt{1 - \alpha_v^2}$ in the existing 192-byte bitplane slot and records $\text{cone\_id}$ in the 12-bit header field (with \texttt{0x0FFF} reserved for global {SM}, \textbf{0\,B/vertex} overhead), guaranteeing $1 - \alpha_v^2 \le 0.116$ ($\ge 8.6\times$ angular variance compression).
-On diffuse or moderately anisotropic manifolds ({Cohere-1M}, {MERU-1M}, isotropic spheres), zero cones satisfy $\bar{\alpha}_c \ge 0.955$, so \rquiver{} defaults cleanly to global {SM}, whereas on concentrated boundary clusters all $256$ tight cones are captured within $\le 0.50$\,MiB globally.
+Every database vertex $v$ achieving $\alpha_v = \langle u_v, \mu_c\rangle \ge 0.94$ against its nearest retained axis stores the 2-bit {SM} code of its normalized tangent residual $\tilde{r}_v = (u_v - \alpha_v\mu_c)/\sqrt{1 - \alpha_v^2}$ in the existing 192-byte bitplane slot and records $\text{cone\_id}$ in the 12-bit header field (with \texttt{0x0FFF} reserved for global {SM}, \textbf{0\,B/vertex} overhead), giving $\beta_v^2=1-\alpha_v^2\le0.1164$. The cosine-error multiplier is $\beta_{q,c}\beta_v$ in Theorem~\ref{thm:tangent_cone}(3).
+The four real benchmarks retain zero cones under the joint support and purity criteria. Both synthetic clustered datasets retain 256 axes ($0.50$\,MiB at $D=512$). This gate selects tightly concentrated directional modes from the database sample.
 
 \subsection{Inside-Out Seeding and Stem-Excess QuadriPrune}
 \label{subsec:compass}
@@ -53,38 +87,40 @@ By Theorem~\ref{thm:vamana_pathologies}(1), single-metric {Vamana} pruning allow
 Algorithm~\ref{alg:compass_build} replaces isotropic pruning with an inside-out fiber-bundle construction.
 
 \begin{algorithm}[t]
-\caption{Warped-Product Construction \& Zero-Island Repair}
+\caption{Warped-Product Construction \& Chord-Swap Repair}
 \label{alg:compass_build}
 \small
 \begin{algorithmic}[1]
 \Require Dataset $\mathcal{X} \subset \Bball$, max out-degree $M_0 = 2M$, build beam $L_c$, slack $\alpha > 1$
-\Ensure Directed proximity graph $G = (V, E)$ with $100\%$ entry reachability
-\State Compute exact polar headers $(r_v, f_v, \rho_v)$, fit purity-gated \texttt{ResidualConeDict}, encode 2-bit {SM} payloads, and build \texttt{PolarRouter} (\S\ref{subsec:router})
-\State Sort vertices $\pi = (v_1, \dots, v_N)$ in non-decreasing geodesic depth $\rho_{v_1} \le \dots \le \rho_{v_N}$; initialize core scaffold on $\pi_{1..S_0}$
-\For{parallel radial wave $B_t \subset \pi$ ordered inside-out}
+\Ensure Graph $G=(V,E)$ with maximum degree $M_0$ and measured entry-reachable set $\mathcal R$
+\State Compute FP32 polar headers $(r_v, f_v, \rho_v)$, fit purity-gated \texttt{ResidualConeDict}, encode 2-bit {SM} payloads, and build \texttt{PolarRouter} (\S\ref{subsec:router})
+\State Sort vertices $\pi = (v_1, \dots, v_N)$ in non-decreasing geodesic depth $\rho_{v_1} \le \dots \le \rho_{v_N}$ and initialize empty adjacency lists
+\For{consecutive radial wave $B_t$ of up to 256 vertices in $\pi$}
   \For{each $u \in B_t$ in parallel}
     \State $\mathcal{C}_u \gets \textsc{PolarBeamSearch}(G, u, L_c)$ via 2-bit polar proxy $\widehat{P}_{\mathbb{B}}$
     \State Partition up to $M_0$ outgoing edges from $\mathcal{C}_u$ via \textbf{QuadriPrune}:
-    \State \hspace{0.8em}(a) \emph{Geodesic fiber} ($q_{\mathrm{geo}} = \lfloor \frac{3}{8}M_0\rfloor$): stem-excess prune~\eqref{eq:dom_geo}
-    \State \hspace{0.8em}(b) \emph{Shielded isobathic ring} ($|\rho_v - \rho_u| \le \delta_\rho$, up to $\lfloor \frac{7}{8}M_0\rfloor$): spherical prune shielded from off-shell hubs ($|\rho_w - \rho_u| > \delta_\rho$)
-    \State \hspace{0.8em}(c)--(d) \emph{Inward \& outward elevators} ($q_{\mathrm{in}}, q_{\mathrm{out}}$): step-aligned inward and outward radial transitions minimizing~\eqref{eq:elevator_obj}
+    \State \hspace{0.8em}(a) \emph{Geodesic fiber} (cumulative cap $\max(1,\lfloor3M_0/8\rfloor)$): stem-excess prune~\eqref{eq:dom_geo}
+    \State \hspace{0.8em}(b) \emph{Shielded isobathic ring} (cumulative cap $\lfloor7M_0/8\rfloor$): rank by angle plus depth gap, test dominators with $|\rho_w-\rho_v|\le0.60$
+    \State \hspace{0.8em}(c)--(d) \emph{Inward \& outward elevators} : split remaining capacity, select step-aligned transitions via~\eqref{eq:elevator_obj}, then apply fallback fill
     \State Insert reverse edges $v \to u$ for $v \in N^+(u)$, re-applying {QuadriPrune} when $\deg^+(v) > M_0$
   \EndFor
 \EndFor
-\State $(\mathcal{R}, \texttt{parent}) \gets \textsc{DirectedBFSTree}(G, \text{RouterEntries})$ \Comment{Island repair (\S\ref{subsec:repair})}
+\State Final-prune every adjacency list to $M_0$ slots
+\State $(\mathcal{R}, \texttt{parent}) \gets \textsc{DirectedBFSTree}(G, \text{entry\_hub})$ \Comment{\S\ref{subsec:repair}}
 \For{each $u \in \pi$ with $u \notin \mathcal{R}$}
-  \State Select reachable anchor $p \in \mathcal{R}$ from $N^+(u)$, hubs, or interior core
+  \State Search $N^+(u)$, hubs, and the 256-vertex interior prefix for reachable $p$ with a free slot or removable non-tree chord
+  \If{no qualifying anchor exists} \State Continue to the next vertex \EndIf
   \If{$\deg^+(p) < M_0$} append $p \to u$
   \Else\ replace peripheral chord $p \to w^\star$ s.t.\ $\texttt{parent}[w^\star] \ne p \land \deg^-(w^\star) \ge 2$ with $p \to u$
   \EndIf
   \State $\texttt{parent}[u] \gets p$; expand $(\mathcal{R}, \texttt{parent})$ via incremental {BFS} from $u$
 \EndFor
-\State \Return CSR-compacted graph $G$ and $4096$\,B \texttt{HotSmPage} layout
+\State \Return fixed-stride graph $G$, reachable set $\mathcal R$, and $4096$\,B \texttt{HotSmPage} layout
 \end{algorithmic}
 \end{algorithm}
 
 \paragraph{Inside-Out Geodesic Seeding.}
-Sorting vertices in non-decreasing depth $\rho_{v_1} \le \dots \le \rho_{v_N}$ constructs the low-curvature interior scaffold first, allowing subsequent boundary waves to attach onto already-stabilized radial bridges rather than mutually disconnecting on sparse outer shells.
+Sorting vertices by non-decreasing depth schedules interior vertices before boundary waves. Router seeds are computed from the full database before these 256-vertex waves connect their adjacency lists.
 
 \paragraph{Stem-Excess and Angle-Guarded Geodesic Dominance.}
 To prevent interior vertices from occluding opposite subtrees via Theorem~\ref{thm:vamana_pathologies}(1)---a curvature-induced hub pathology distinct from flat angular redundancy~\cite{fu2019nsg,fu2022high} and cross-modal query shift~\cite{chen2024roargraph}---\rquiver{} replaces raw $\alpha$-pruning with \emph{stem-excess angle-guarded dominance}.
@@ -104,29 +140,55 @@ Neighbor $w$ geodesically dominates candidate $v$ ($\operatorname{Dom}_{\mathrm{
 Condition $\ell_\angle(w, v) \le \ell_\angle(u, v)$ forbids $w$ from pruning candidates at wider spherical angles than $u$ itself (preventing $180^\circ$ cross-origin occlusion), while subtracting $\Delta_{\mathrm{stem}}$ ensures $w$ shadows $v$ through genuine angular proximity rather than radial depth advantage alone.
 Moreover, because $\tilde{d}(w, v) \ge |\rho_w - \rho_v|$ by the reverse triangle inequality, checking $\alpha|\rho_w - \rho_v| > \tilde{d}_{\mathrm{eff}}(u, v; w)$ rejects non-dominating pairs in $O(1)$ scalar arithmetic without evaluating $\arccosh$.
 
-\paragraph{Shielded Isobathic Rings, Elevators, and Flat-Limit Equivalence.}
-Within each vertex's $M_0 = 32$ slots:
-(i)~\emph{Geodesic fiber} ($q_{\mathrm{geo}} = \max(4, \lfloor 3 M_0 / 8\rfloor)$) applies~\eqref{eq:dom_geo};
-(ii)~\emph{Radially shielded isobathic ring} (up to $\lfloor 7 M_0 / 8\rfloor$) restricts candidates to $|\rho_v - \rho_u| \le \delta_\rho$, forbids off-shell vertices ($|\rho_w - \rho_u| > \delta_\rho$) from shadowing ring members, and prunes purely on $\Sunit$ via $\alpha_{\mathrm{iso}}\ell_\angle(w, v) \le \ell_\angle(u, v)$, preserving lateral boundary highways while restoring shared-query cancellation ($d_q \approx 0$, Theorem~\ref{thm:conformal_flip}(2));
-(iii)--(iv)~\emph{Inward and outward radial elevators} ($q_{\mathrm{in}}, q_{\mathrm{out}} \ge 2$) select radial transitions minimizing the step-aligned objective
+\paragraph{Shielded Isobathic Rings, Elevators, and Channel Allocation.}
+Selection uses cumulative caps within each $M_0=32$-slot list.
+(i)~The geodesic channel fills up to $\max(1,\lfloor3M_0/8\rfloor)=12$ slots via~\eqref{eq:dom_geo}.
+(ii)~The ring channel extends the combined list to 28 entries. It orders candidates by $\ell_\angle(u,v)+0.85|\rho_u-\rho_v|$. A selected neighbor $w$ may dominate $v$ only if $|\rho_w-\rho_v|\le0.60$ and $\alpha\ell_\angle(w,v)\le\ell_\angle(u,v)$.
+(iii)--(iv)~With $s$ entries selected and $h=M_0-s$ slots remaining, the inward pass targets $s+\lfloor h/2\rfloor$ total entries and the outward pass fills toward $M_0$. Thus a full 28-entry prefix leaves two slots for each radial direction. Their objective is
 \begin{equation}
-  J_{\mathrm{elev}}(u, v; \Delta^*) \triangleq \bigl||\rho_v - \rho_u| - \Delta^*\bigr| + \lambda_{\mathrm{elev}}\,\ell_\angle(u, v)
-  \label{eq:elevator_obj}
+ J_{\mathrm{elev}}(u,v)=\ell_\angle(u,v)
+ +0.15\bigl||\rho_v-\rho_u|-0.65\bigr|.
+ \label{eq:elevator_obj}
 \end{equation}
-across inward ($\rho_v < \rho_u - \epsilon_\rho$) and outward ($\rho_v > \rho_u + \epsilon_\rho$) shells so trajectories can descend toward the radial minimizer $\rho^*$ and re-ascend to target boundary shells (Theorem~\ref{thm:vamana_pathologies}(2)).
-In the flat limit $c \to 0^+$ or when radial variance $\Var(\rho) \to 0$, $|\rho_v - \rho_u| \to 0$ across $\mathcal{X}$: the elevator sets empty, $\Delta_{\mathrm{stem}} \to 0$, and {QuadriPrune} degenerates smoothly to flat spherical {Vamana}/{\quiver}~\cite{subramanya2019diskann,xiao2026quiver}\ifpreprint\ (proved in Appendix~\ref{app:vamana_pathologies})\fi.
+Candidates must satisfy $\rho_v<\rho_u-0.18$ inward or $\rho_v>\rho_u+0.18$ outward. Direction-specific dominators satisfy $\rho_w<\rho_u-0.10$ or $\rho_w>\rho_u+0.10$, respectively, and use the angular $\alpha$ test.
+If these passes leave capacity, a diversity pass orders remaining candidates by $\ell_\angle(u,v)+0.25|\rho_u-\rho_v|$ and admits angular dominators within $|\rho_w-\rho_v|\le1.0$. A final ordered fill takes remaining distinct candidates up to $M_0$.
+At constant depth the elevator sets are empty and the ring ranks by angle. Appendix~\ref{app:vamana_pathologies} derives the channel-wise constant-depth and flat-curvature limits.
 
 \subsection{Spanning-Tree Chord-Swap Island Repair}
 \label{subsec:repair}
 
 Parallel batch insertion and hub saturation can still leave $0.05\%\text{--}0.06\%$ of extreme boundary vertices with zero incoming edges ($\deg^-(u) = 0$: $518\text{--}626$ islands on {Cohere-1M}), capping asymptotic recall strictly below $100\%$.
-The single-pass chord-swap repair in Algorithm~\ref{alg:compass_build} eliminates unreachable islands in $O(N M_0)$ time while strictly preserving maximum out-degree $\deg^+(p) \le M_0$:
-after directed {BFS} initializes a spanning tree $(\mathcal{R}, \texttt{parent})$ from the router entry set, each unreachable vertex $u \notin \mathcal{R}$ selects a reachable anchor $p \in \mathcal{R}$ (scanning $N^+(u)$, router hubs, and the interior core prefix) and either appends $p \to u$ (if $\deg^+(p) < M_0$) or replaces a peripheral non-tree chord $p \to w^\star$ satisfying both $\texttt{parent}[w^\star] \ne p$ and $\deg^-(w^\star) \ge 2$, decrementing $\deg^-(w^\star)$ in place and expanding $(\mathcal{R}, \texttt{parent})$ incrementally from $u$\ifpreprint\ (monotonic reachability invariant proved in Appendix~\ref{app:vamana_pathologies})\fi.
+The chord-swap pass in Algorithm~\ref{alg:compass_build} grows entry reachability while preserving maximum out-degree $\deg^+(p)\le M_0$. A qualifying anchor has spare capacity or an eligible non-tree chord.
+Directed {BFS} initializes a spanning tree $(\mathcal{R},\texttt{parent})$ from the router entry hub, each unreachable vertex $u \notin \mathcal{R}$ selects a reachable anchor $p \in \mathcal{R}$ (scanning $N^+(u)$, router hubs, and the interior core prefix) and either appends $p \to u$ (if $\deg^+(p) < M_0$) or replaces a peripheral non-tree chord $p \to w^\star$ satisfying both $\texttt{parent}[w^\star] \ne p$ and $\deg^-(w^\star) \ge 2$, decrementing $\deg^-(w^\star)$ in place and expanding $(\mathcal{R}, \texttt{parent})$ incrementally from $u$\ifpreprint\ (monotonic reachability invariant proved in Appendix~\ref{app:vamana_pathologies})\fi.
 Because no spanning-tree edge is ever overwritten, $\mathcal{R}$ grows monotonically without cycle breakage; across all 21 million-scale {Zen~4} graphs, the pass reduces unreachable islands to \textbf{0} ($1{,}000{,}000 / 1{,}000{,}000$ reachable) in under $0.3$\,s.
 
 \subsection{Convex-Support Polar Router}
 \label{subsec:router}
 
-To avoid routing boundary queries through a single origin-adjacent medoid (Theorem~\ref{thm:vamana_pathologies}(2)), \rquiver{} maintains a constant-memory \texttt{PolarRouter} over $C_{\mathrm{coarse}} = 16$ and $C_{\mathrm{fine}} = 128$ spherical Tammes cones~\cite{tammes1930origin} crossed with $S = 8$ quantile-adaptive radial shells ($1{,}024$ cells total).
-Given query $q = (r_q, \rho_q, u_q)$, \rquiver{} scores coarse cones $\gamma_a = \langle u_q, \mu_a\rangle$, expands top fine sub-cones, evaluates the constrained radial minimizer $\rho_{\mathrm{sup}}^*(\rho_q, \gamma_a)$ over dataset quantiles $[\rho_{0.01}, \rho_{0.99}]$ via Proposition~\ref{prop:geodesic_apex}(2), and seeds the beam with up to $4$ entry vertices from $(\text{cone}_a, \text{shell}(\rho_{\mathrm{sup}}^*))$ and $\text{shell}(\rho_q)$.
-When build-time statistics detect a near-isotropic sphere ($\max_c \bar{\alpha}_c < 0.30$), coarse filtering is bypassed so all $128$ fine cones are scanned directly in $<0.3\,\mu\text{s}$.
+\rquiver{} builds $C=\min(N,\operatorname{clamp}(\lfloor N/100\rfloor,64,2048))$ directional landmarks in SM mode and crosses them with eight quantile-adaptive shells. At 1M scale this gives 2,048 fine cones and 16,384 cells, each storing up to eight 32-bit vertex IDs. For $C>256$, 64 coarse landmarks each retain a 128-cone query shortlist.
+The query scores coarse landmarks, expands the leading shortlists, and uses the constrained radial minimizer $\rho_{\mathrm{sup}}^*(\rho_q,\gamma)$ from Proposition~\ref{prop:geodesic_apex}(2) to select shell representatives. The radial support endpoints are the smallest positive sampled database depth and the maximum depth. The variance-stabilized configuration activates a sampled isotropy guard that scans fine cones directly when coarse alignment falls below its dimension-scaled threshold. Table~\ref{tab:fixed_parameters} gives the fixed settings.
+
+\begin{table*}[t]
+ \centering
+ \caption{Fixed construction and execution settings. Search operating points are scanned separately in \S\ref{subsec:eval_setup}.}
+ \label{tab:fixed_parameters}
+ \small
+ \begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}X@{}}
+ \toprule
+ Mechanism & Fixed values and rules\\
+ \midrule
+ Construction & $M=16$, $M_0=32$, $L_c=128$, $\alpha=1.2$, radial wave size 256, repair fallback prefix 256\\
+ Geodesic/ring caps & 12 geodesic slots, then 28 cumulative slots at $M_0=32$\\
+ Ring & depth-gap weight 0.85, dominator--candidate tolerance 0.60, $\alpha_{\mathrm{iso}}=1.2$\\
+ Elevators & step 0.65, step penalty 0.15, candidate depth offset 0.18, dominator depth offset 0.10\\
+ Diversity fill & depth-gap weight 0.25, dominator--candidate tolerance 1.0\\
+ Router & up to 2,048 fine landmarks, 64 coarse landmarks, 128-entry query shortlists, 8 shells, 8 IDs/cell, 16 origin hubs\\
+ Shell boundaries & if $p_{01}(\rho)>0.35$, depth quantiles $[0.005,0.02,0.05,0.12,0.25,0.45,0.72]$\newline otherwise $[0.25,0.48,0.75,1.15,1.75,2.60,3.80]$\\
+ Isotropy guard & coarse threshold $\operatorname{clip}_{[0.11,0.19]}(3.8/\sqrt{\max(D,64)})$\newline sampled median maximum fine alignment below $\operatorname{clip}_{[0.19,0.30]}(5.6/\sqrt{\max(D,64)})$\\
+ Cone selection & sample $\min(N,8192)$, depth $p_{90}\ge1.0$, leader threshold 0.91, assignment 0.94, mean purity 0.955\newline support $\operatorname{clamp}(\lfloor N_{\mathrm{samp}}/1024\rfloor,3,12)$, 1,024 leader candidates, two refinement rounds, at most 512 retained axes\\
+ Query cone cache & materialization $|\alpha_{q,c}|\ge0.20$, $\beta_{q,c}>10^{-6}$, at most 16 slots\\
+ CJ-Gate & $\kappa_{\mathrm{SM}}=0.221$, relative gap 0.22, $z=2$, expansion offset 0.8, cap 768\\
+ Sketch / prefetch & 256 bits, variance reference $H=48$, header prefetch window 8\\
+ \bottomrule
+ \end{tabularx}
+\end{table*}

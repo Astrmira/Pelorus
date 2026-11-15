@@ -1,27 +1,105 @@
-# QuIVer
+# Pelorus
 
-QuIVer 是使用两位符号幅值量化与图导航的 Rust ANN 库，支持余弦相似度和 Poincaré 球上的原生双曲检索。
+**Warped-Product Graph Indexing for Hyperbolic Vector Search**
 
-索引提供并行构建、近似与精确查询、插入、软删除、压缩、重建和带校验和的原子保存。双曲查询返回按精确测地距离排序的候选。
+[![CI](https://github.com/Astrmira/Pelorus/actions/workflows/ci.yml/badge.svg)](https://github.com/Astrmira/Pelorus/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/Rust-Edition%202024-orange.svg)](Cargo.toml)
 
-## 使用源码
+English | [简体中文](README.zh-CN.md)
 
-在仓库根目录执行以下命令。
+**Pelorus** is an in-memory Rust approximate nearest neighbor (ANN) engine designed for native **Poincaré ball** ($\mathbb{B}_c^D$) hyperbolic search (as well as standard cosine similarity). It bridges the fidelity–memory dilemma in million-scale non-Euclidean retrieval by decoupling hyperbolic embeddings into a warped product $\mathbb{R}_{\ge 0} \times \mathbb{S}^{D-1}$, combining compact 2-bit Sign-Magnitude (SM) spherical codes with exact unquantized radial/conformal metadata and full-precision tail reranking.
 
-```powershell
+> **Package Naming Note:** This repository and its accompanying paper use the project name **Pelorus**; for compatibility with frozen benchmark harnesses and existing callers, the Rust crate currently keeps the package name `quiver-ann` (`use quiver_ann::...`). See [`docs/source-migration.md`](docs/source-migration.md) for historical symbol and directory mappings.
+
+---
+
+## Core Architecture & Highlights
+
+- **Warped-Product Polar Quantization**: Pairs a **32-byte unquantized FP32 radial/conformal header** with scale-invariant **2-bit Sign-Magnitude (SM)** spherical bitplanes and **FP64** exact geodesic tail reranking, eliminating conformal distortion across radial shells without storing FP32 vectors in the hot navigation path.
+- **Zero-Extra-Byte Tangent-Cone Residuals (`ResidualConeDict`)**: Inside tight boundary cones where global 2-bit directional quantization hits an error floor, Pelorus overwrites the vertex's existing 2-bit slot with its quantized tangent residual around a cone prototype—gated by cosine-purity—achieving **0 B/vertex additional hot memory**.
+- **Curvature-Aware Graph Topology (`QuadriPrune` + Chord Swaps)**: Replaces flat Vamana pruning (which suffers from all-angle radial occlusion in negative curvature) with inside-out quadruplet pruning across geodesic, radial-ring, inward, and outward slots plus degree-preserving chord swaps, achieving **zero unreachable zero-in-degree islands** across all measured graphs.
+- **Page-Co-Located SIMD Execution Engine**: Packs headers, stabilized 256-bit sketches (`SymSketch256`), and 2-bit bitplanes into **4096 B OS pages (`HotSmPage`)**; prunes bitplane loads by **57.6%** via Stage-0.5 i16 projection and Stage-1a/1b header-first bounds; evaluates bitplanes with a **3-to-2 carry-save AVX2** kernel (`< 35 ns/candidate`); and adapts reranking budgets via variance-calibrated **CJ-Gate**.
+
+<p align="center">
+  <img src="paper/vldb/figures/pelorus_geometry.png" alt="Pelorus geometric foundations: radial occlusion, QuadriPrune, and polar/tangent coding" width="96%"/>
+</p>
+<p align="center"><em>Figure 1: Negative-curvature radial occlusion in the Poincaré ball, inside-out <code>QuadriPrune</code> with degree-preserving chord swaps, and zero-extra-byte polar + tangent-cone residual coding.</em></p>
+
+<p align="center">
+  <img src="paper/vldb/figures/pelorus_execution.png" alt="Pelorus co-located HotSmPage layout, SymSketch256 + CSA AVX2 scoring, and CJ-Gate refinement" width="96%"/>
+</p>
+<p align="center"><em>Figure 2: Single-page <code>HotSmPage</code> (4 KiB) vertex layout, header-first <code>SymSketch256</code> + 3-to-2 carry-save AVX2 bitplane scoring, and Stage-0.5 + <code>CJ-Gate</code> tail reranking.</em></p>
+
+---
+
+## Key Empirical Results
+
+Measured on isolated **AMD EPYC 9654 (Zen 4)** Linux containers (32 build threads, 1–24 query threads, native AVX-512F/AVX2+FMA, exact FP64 ground truth; `M=16, L_c=128` for Pelorus, up to `M=32, L_c=256` for external baselines):
+
+| Workload | Dimensions | Build (32T) | Hot Nav Mem | 1T QPS @99% | 24T QPS @99% | Highlight vs. Baselines |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Cohere-1M** | 1M × 768D | 35.0 s | 485.0 MB* | 1,930 | 42,466 | **5.44×** faster build vs. `Polar-FP32`; **2.60×** less hot memory vs. `Polar-SQ8`; **4.30× / 6.31×** (1T/24T) higher QPS vs. `Polar-FP32` |
+| **MERU-1M** | 1M × 512D | 25.7 s | 420.8 MB* | 2,547 | 53,483 | Reaches **99.25%** Recall@10; **3.37×–3.88×** faster 24T throughput than `HyperspaceDB FP32` |
+| **OpenAI-1536** | 990K × 1536D | 43.6 s | 670.6 MB* | 792 | 14,731 | Sub-millisecond/low-latency high-dimensional mapped hyperbolic search |
+| **WordNet-Hazy** | 83.9K × 20D | 1.5 s | 26.1 MB* | 3,089 | 65,405 | Native Lorentz-mapped taxonomy (`0.38 ms` 1T p99 at `99%` recall) |
+| **Clustered-Narrow** | 1M × 512D | 25.3 s | — | 1,840 | 38,876 | Lifts recall from **34.22% → 99.385%** at `L=256` (`99.80%` at `L=384`); **1.84×–4.56×** over `HyperspaceDB` |
+
+<sub>*Split hot-navigation allocation; 4096 B page-co-located (`HotSmPage`) footprints are 517.0 MB (Cohere-1M), 516.8 MB (MERU-1M), 765.6 MB (OpenAI-1536), and 32.8 MB (WordNet-Hazy).</sub>
+
+> **Applicability Boundary (`Uniform-Narrow`)**: On isotropic narrow shells ($\rho \in [3.9, 4.1]$ with zero clusters), cone residuals cannot activate and 2-bit spherical margin-to-noise bounds peak Recall@10 at **64.735%**, whereas unquantized `HyperspaceDB FP32 flat` reaches **92.170%**. Full-precision or 8-bit representations remain preferable for uniformly distributed thin hyperbolic shells.
+
+---
+
+## Quick Start (Rust)
+
+Clone the repository and run the core test suite and examples:
+
+```bash
+git clone https://github.com/Astrmira/Pelorus.git
+cd Pelorus
 cargo test --release --lib --tests
-cargo run --release --example basic
 cargo run --release --example hyperbolic
+cargo run --release --example basic
 ```
 
-通过本地路径依赖集成。
+Add `quiver-ann` as a local path dependency in `Cargo.toml`:
 
 ```toml
 [dependencies]
-quiver-ann = { path = "../QuIVer" }
+quiver-ann = { path = "../Pelorus" }
 ```
 
-### 余弦检索
+### Native Poincaré Hyperbolic Search
+
+```rust
+use quiver_ann::{BuildConfig, Index, PoincareNavigation, SearchConfig};
+
+fn main() -> quiver_ann::Result<()> {
+    let index = Index::build_poincare(
+        2,
+        &[100, 200, 300],
+        &[0.1, 0.0, 0.4, 0.0, 0.0, 0.3],
+        &BuildConfig::default(),
+        1.0, // Positive finite curvature parameter c; inputs must satisfy c * ||x||^2 < 1
+        PoincareNavigation::GeometryBq2,
+    )?;
+
+    let results = index.search(
+        &[0.12, 0.0],
+        &SearchConfig {
+            top_k: 2,
+            ef_search: 16,
+            rerank_limit: None,
+        },
+    )?;
+
+    assert_eq!(results[0].0, 100);
+    Ok(())
+}
+```
+
+### Cosine Search
 
 ```rust
 use quiver_ann::{BuildConfig, Index, SearchConfig};
@@ -33,6 +111,7 @@ fn main() -> quiver_ann::Result<()> {
         &[1.0, 0.0, 0.0, 1.0],
         &BuildConfig::default(),
     )?;
+
     let results = index.search(
         &[1.0, 0.0],
         &SearchConfig {
@@ -41,45 +120,13 @@ fn main() -> quiver_ann::Result<()> {
             rerank_limit: None,
         },
     )?;
+
     assert_eq!(results[0].0, 100);
     Ok(())
 }
 ```
 
-### 双曲检索
-
-```rust
-use quiver_ann::{BuildConfig, Index, PoincareNavigation, SearchConfig};
-
-fn main() -> quiver_ann::Result<()> {
-    let index = Index::build_poincare(
-        2,
-        &[100, 200, 300],
-        &[0.1, 0.0, 0.4, 0.0, 0.0, 0.3],
-        &BuildConfig::default(),
-        1.0,
-        PoincareNavigation::GeometryBq2,
-    )?;
-    let results = index.search(
-        &[0.12, 0.0],
-        &SearchConfig {
-            top_k: 2,
-            ef_search: 16,
-            rerank_limit: None,
-        },
-    )?;
-    assert_eq!(results[0].0, 100);
-    Ok(())
-}
-```
-
-曲率参数 `c` 必须为正有限数，输入坐标满足 `c * ||x||² < 1`。向量按行连续存放，外部标识为唯一的 `u64`，零号标识可用。
-
-查询结果为 `(id, score)`，按分数降序排列。余弦模式的分数为余弦相似度，双曲模式的分数为负测地距离。`search_exact` 使用相同的几何、删除状态和分数约定进行全库扫描。
-
-`BuildConfig` 控制图度数、构建搜索宽度和剪枝系数。`SearchConfig` 控制返回数量、查询搜索宽度和精排预算。构建使用当前 Rayon 线程池，可通过调用方的线程池设置构图并行度。
-
-### 维护与保存
+### Dynamic Updates & Checksummed Persistence
 
 ```rust,no_run
 use quiver_ann::{BuildConfig, Index};
@@ -89,6 +136,7 @@ fn main() -> quiver_ann::Result<()> {
     index.insert(200, &[0.0, 1.0])?;
     index.remove(100);
     index.compact()?;
+
     index.save("vectors.quiver")?;
     let restored = Index::load("vectors.quiver")?;
     assert!(restored.contains(200));
@@ -96,44 +144,87 @@ fn main() -> quiver_ann::Result<()> {
 }
 ```
 
-文件保存原始向量、外部标识和构建参数。`load` 校验文件后重建内存图，兼容既有的索引文件版本。`navigation_storage_bytes` 返回图与导航表示的有效载荷字节数，原始向量的内存单独计算。
+- **Coordinates & IDs**: Vectors are stored row-major; external IDs are unique `u64` values (`0` is supported). In Poincaré mode, curvature `c` must be finite and positive, and coordinates must satisfy $c\|x\|_2^2 < 1$.
+- **Scoring & Exact Scan**: `search` returns `(id, score)` sorted in descending order—cosine similarity in cosine mode and negative geodesic distance in hyperbolic mode. `search_exact` performs a full scan under the same metric, deletion mask, and score convention.
+- **Parallelism & Memory Accounting**: Graph construction uses the active Rayon thread pool. `navigation_storage_bytes()` reports the payload size of the graph and navigation state separately from raw vectors.
 
-## 源码结构
+---
+
+## Reproducing Paper Figures & Benchmarks
+
+- **Papers**:
+  - [`paper/vldb_submission/main.tex`](paper/vldb_submission/main.tex) — 12-page PVLDB Vol. 20 camera/submission manuscript.
+  - [`paper/vldb/main.tex`](paper/vldb/main.tex) — Full technical report with complete mathematical proofs and extended appendices.
+- **Regenerate Vector PDF Figures & LaTeX Tables** (from archived measurement CSVs in `paper/vldb/figures/data/`):
+  ```bash
+  python paper/vldb/plot_figures.py
+  ```
+- **Run Research Benchmarks** (compile with `--features research`, exposing diagnostics under `quiver_ann::research`):
+  ```bash
+  cargo run --release --features research --example benchmark_geometry_sweep -- \
+    --data DATA_DIR --n 1000000 --dim 768 --queries 1000 --build-threads 32 \
+    --mode a8 --plan PLAN.json --output RESULT.jsonl
+  ```
+  See [`research/README.md`](research/README.md), [`research/benchmarks/README.md`](research/benchmarks/README.md), and [`research/experiments/README.md`](research/experiments/README.md) for dataset binary layouts (`documents.f32`, `queries.f32`, `truth.u64`), ablation mode labels (`a8`, `a7`, `sq8`, `fp32`), and manifest provenance.
+
+---
+
+## Repository Structure
 
 ```text
 src/
-  config.rs              公开构建与查询配置
-  index/                 公开 API、输入校验、维护与持久化
-  graph/                 图存储、并行构建、余弦查询与属性预筛
-    hyperbolic/          极坐标路由、残差编码、热存储与双曲搜索
-  quantization/          两位签名、符号幅值重构与 SIMD 内核
-  geometry.rs            几何量化表示与导航模式
-  metric.rs              距离计算与流形约束
-  vector.rs              向量算子
-  research.rs            研究特性下的配置与诊断接口
-examples/                常规使用示例
-tests/                   核心功能与公共契约回归
-benches/                 Criterion 查询基准
-research/                测量工具、实验索引与第三方来源
-paper/vldb/              论文源码与图表
+  config.rs                Public BuildConfig & SearchConfig
+  geometry.rs              Polar/SM representations & PoincareNavigation modes
+  metric.rs                Distance kernels & manifold domain validation
+  vector.rs                Low-level vector primitives
+  research.rs              Research feature hooks, strategy toggles & stage profiling
+  index/                   Public Index API, validation, maintenance & persistence
+  graph/                   Graph storage, parallel build, cosine search & prefiltering
+    hyperbolic/            Polar routing, tangent-cone residuals, HotSmPage & search
+  quantization/            2-bit SM coding, reconstruction & SIMD (AVX2 / AVX-512) kernels
+examples/                  Standard cosine & Poincaré usage examples
+tests/                     Core functional & public contract regression tests
+benches/                   Criterion microbenchmarks
+docs/                      Source migration & naming notes
+research/                  Benchmark harnesses, experiment manifests & third-party refs
+paper/
+  vldb/                    Full technical report LaTeX sources, plots & provenance data
+  vldb_submission/         12-page PVLDB submission manuscript
 ```
 
-`research` feature 提供方向表示对照、组件配置、损失分解和阶段计时，入口集中于 `quiver_ann::research`。研究配置中的进程级开关应在构图与并发查询之前设置，并在使用期间固定。[研究目录说明](research/README.md)
+---
 
-## 开发验证
+## Development & Verification
 
-```powershell
+Commands matching [`.github/workflows/ci.yml`](.github/workflows/ci.yml) (CI runs on Linux, Windows, and macOS):
+
+```bash
 cargo fmt --all --check
 cargo clippy --all-targets --all-features -- -D warnings
-cargo test --release --lib --tests
-cargo test --release --all-features --lib --tests -- --test-threads=1
+cargo test --locked --release --lib --tests
+cargo test --locked --release --all-features --lib --tests -- --test-threads=1
 cargo doc --no-deps --all-features
 ```
 
-研究特性的测试串行运行，以隔离进程级策略配置。现有 CI 覆盖 Linux、Windows 和 macOS 的核心构建与回归。
+*(Feature-gated `research` tests run single-threaded to isolate process-wide experimental strategy switches.)*
 
-命名迁移和研究入口调整记录在迁移说明中。[源码迁移说明](docs/source-migration.md)
+---
 
-## 许可证
+## Citation
 
-Apache-2.0。[许可证](LICENSE) · [上游版权声明](NOTICE)
+If you find Pelorus useful in your research, please cite:
+
+```bibtex
+@misc{xiao2026pelorus,
+  author       = {Wenxuan Xiao and Xu Cao},
+  title        = {{Pelorus}: Warped-Product Graph Indexing for Hyperbolic Vector Search},
+  year         = {2026},
+  howpublished = {\url{https://github.com/Astrmira/Pelorus}}
+}
+```
+
+---
+
+## License & Upstream Notice
+
+Licensed under the **Apache License 2.0** ([`LICENSE`](LICENSE)). Upstream copyright attribution is preserved in [`NOTICE`](NOTICE).

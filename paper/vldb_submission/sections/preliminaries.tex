@@ -1,0 +1,68 @@
+% 第二章：预备知识与问题形式化（精修投稿版）
+\section{Preliminaries and Problem Formulation}
+\label{sec:prelim}
+
+\subsection{Hyperbolic Models and Polar Geodesic Proxy}
+\label{subsec:models}
+
+For constant negative sectional curvature $-c < 0$, the $D$-dimensional {Poincar\'e} ball is $\Bball = \{x \in \R^D : c\|x\|_2^2 < 1\}$ with conformal metric $g_x^{\mathbb{B}} = f_x^2 I_D$, $f_x = \frac{2}{1 - c\|x\|_2^2}$, and geodesic distance $d_{\mathbb{B}}(q, v) = \frac{1}{\sqrt{c}}\arccosh\bigl(1 + \frac{2c\|q - v\|_2^2}{(1 - c\|q\|_2^2)(1 - c\|v\|_2^2)}\bigr)$.
+Encoders such as fully hyperbolic networks~\cite{chen2022fully}, {MERU}~\cite{desai2023meru}, and {HypRAG}~\cite{madhu2026hyprag} output points on the $(D+1)$-D {Lorentz} sheet $\Lmod = \{z = (z_0, \tilde{z}) \in \R \times \R^D : -z_0^2 + \|\tilde{z}\|_2^2 = -1/c,\; z_0 > 0\}$ under $d_{\mathbb{L}}(z, z') = \frac{1}{\sqrt{c}}\arccosh(c(z_0 z'_0 - \langle \tilde{z}, \tilde{z}'\rangle))$.
+Stereographic projection
+\begin{equation}
+  \Pi(z_0, \tilde{z}) = \frac{\tilde{z}}{1 + \sqrt{c}\,z_0} \in \Bball
+  \label{eq:lorentz_isometry}
+\end{equation}
+is an exact isometry ($d_{\mathbb{B}}(\Pi(z), \Pi(z')) = d_{\mathbb{L}}(z, z')$)~\cite{nickel2018lorentz} that drops $z_0$ at ingestion.
+
+Writing $x = r_x u_x$ with radius $r_x = \|x\|_2 \in [0, 1/\sqrt{c})$, direction $u_x \in \Sunit$ ($u_0 = e_1$), geodesic radius $R_x = d_{\mathbb{B}}(0, x)$, and depth $\rho_x = \sqrt{c}\,R_x = 2\atanh(\sqrt{c}\,r_x)$ ($\sinh\rho_x = \sqrt{c}\,r_x f_x$, $\cosh\rho_x = f_x - 1$) identifies $\Bball \setminus \{0\}$ with the warped product $(0, \infty) \times_{\frac{1}{\sqrt{c}}\sinh(\sqrt{c}R)} \Sunit$ under $\mathrm{d}s^2 = \mathrm{d}R^2 + \frac{1}{c}\sinh^2(\sqrt{c}R)\,\mathrm{d}\Omega_{D-1}^2$.
+For cosine $\gamma_{qv} = \langle u_q, u_v\rangle = \cos\theta_{qv} \in [-1, 1]$, expanding $\|q - v\|_2^2 = (r_q - r_v)^2 + 2 r_q r_v(1 - \gamma_{qv})$ gives the \emph{polar geodesic proxy}
+\begin{equation}
+  P_{\mathbb{B}}(q, v) \triangleq \|q - v\|_2^2 f_q f_v = R(r_q, r_v) + W(r_q, r_v)\bigl(1 - \gamma_{qv}\bigr),
+  \label{eq:polar_proxy}
+\end{equation}
+where $R(r_q, r_v) = (r_q - r_v)^2 f_q f_v$ and $W(r_q, r_v) = 2 r_q r_v f_q f_v = \frac{2}{c}\sinh\rho_q\sinh\rho_v$.
+By the hyperbolic law of cosines, $\frac{c}{4}P_{\mathbb{B}}(q, v) = \sinh^2\bigl(\frac{\sqrt{c}}{2}d_{\mathbb{B}}(q, v)\bigr)$, so
+\begin{equation}
+  \begin{aligned}
+    d_{\mathbb{B}}(q,v)
+    &=\frac{1}{\sqrt c}\arccosh\!\left(1+\frac c2 P_{\mathbb B}(q,v)\right)\\
+    &=\frac{2}{\sqrt c}\asinh\!\left(\frac12\sqrt{cP_{\mathbb B}(q,v)}\right).
+  \end{aligned}
+  \label{eq:proxy_to_geodesic}
+\end{equation}
+Strict monotonicity of~\eqref{eq:proxy_to_geodesic} makes $P_{\mathbb{B}}$ order-isomorphic to $d_{\mathbb{B}}$, deferring $\asinh$ to the final $k$ results.
+The implementation stores $F_v = f_v/2 = (1 - c r_v^2)^{-1}$ and evaluates $P_{\mathrm{impl}} = P_{\mathbb{B}}/4$ with $d_{\mathbb{B}} = \frac{2}{\sqrt{c}}\asinh(\sqrt{c\,P_{\mathrm{impl}}})$ across beam thresholds, radial gates, and Jacobian scales (as $c \to 0^+$, $P_{\mathrm{impl}}(q, v) \to \|q - v\|_2^2$).
+
+\subsection{Two-Level Spherical SM and Comparison Operators}
+\label{subsec:sm_decisions}
+
+Following {\quiver}'s training-free 2-bit {SM} bitplane encoding~\cite{xiao2026quiver}---whose conditional-mean Pythagorean identity (Lemma~\ref{lem:sm_pythagorean}) underpins our orthogonal-projection refinement (\S\ref{sec:system})---$u_v \in \Sunit$ is encoded into sign bitplane $s_{v,i} = \mathbb{I}[u_{v,i} \ge 0]$ and strong-magnitude bitplane $m_{v,i} = \mathbb{I}[|u_{v,i}| > \tau_v]$ ($\tau_v = \frac{1}{D}\sum_{j=1}^D |u_{v,j}|$, strong count $s_v = \sum_{i=1}^D m_{v,i}$).
+Partitioning coordinates into $I_{0,v} = \{i : m_{v,i} = 0\}$ and $I_{1,v} = \{i : m_{v,i} = 1\}$ defines conditional means $a_v = \frac{1}{D - s_v}\sum_{i \in I_{0,v}} |u_{v,i}|$ ($0$ if $s_v = D$), $b_v = \frac{1}{s_v}\sum_{i \in I_{1,v}} |u_{v,i}|$ ($0$ if $s_v = 0$), and step $\delta_v = b_v - a_v$ ($\delta_v \ge 0$ for $0 < s_v < D$; at $s_v = 0$, $b_v = 0$ gives $\delta_v = -a_v$ so all reconstructed coordinates use $a_v$).
+
+\begin{lemma}[Deterministic Two-Level {SM} Pythagorean Identity]
+\label{lem:sm_pythagorean}
+For any $u_v \in \Sunit$, the conditional-mean code $\hat{u}_{v,i} = \sgn(u_{v,i})(a_v + \delta_v m_{v,i})$ ($\sgn(0) = +1$) uniquely minimizes $\|u_v - \tilde{u}\|_2^2$ over two-level vectors sharing $(s_v, m_v)$ with unique populated-group means and zero distributional assumptions, satisfying
+\begin{equation}
+  \langle u_v, \hat{u}_v\rangle = (D - s_v)a_v^2 + s_v b_v^2 = \|\hat{u}_v\|_2^2 \triangleq \sigma_v^2 \in (0, 1],
+  \label{eq:sm_pythagorean}
+\end{equation}
+and $\|u_v - \hat{u}_v\|_2^2 = 1 - \sigma_v^2$.
+For $\bar{x} = \neg(s_q \oplus s_v)$, five popcounts $p_{\oplus} = \popcnt(\bar{x})$, $p_{10} = \popcnt(\bar{x} \wedge m_q)$, $p_{01} = \popcnt(\bar{x} \wedge m_v)$, $p_{11} = \popcnt(\bar{x} \wedge m_q \wedge m_v)$, and $n_{11} = \popcnt(m_q \wedge m_v)$ evaluate $\langle \hat{u}_q, \hat{u}_v\rangle = a_q a_v(2 p_{\oplus} - D) + a_q\delta_v(2 p_{01} - s_v) + \delta_q a_v(2 p_{10} - s_q) + \delta_q\delta_v(2 p_{11} - n_{11})$ exactly (proved in the supplemental material).
+\end{lemma}
+\begin{proof}[Proof Sketch]
+Splitting $\sum_i |u_{v,i}|(a_v + \delta_v m_{v,i})$ over $I_{0,v}, I_{1,v}$ yields $(D - s_v)a_v^2 + s_v b_v^2 = \|\hat{u}_v\|_2^2$, so $\langle u_v - \hat{u}_v, \hat{u}_v\rangle = 0$.
+Expanding $(2\bar{x}_i - 1)$ across $\{1, m_q, m_v, m_q m_v\}$ gives the bilinear form.
+\end{proof}
+
+The main hop scorer uses Lemma~\ref{lem:sm_pythagorean}'s five-popcount product with precomputed FP32 norms: for $t = \operatorname{clip}_{[-1,1]}(\langle \hat{u}_q, \hat{u}_v\rangle / (\sigma_q\sigma_v))$ and $\kappa = \operatorname{clip}_{[0.5,1]}(\sigma_q\sigma_v)$, it applies
+\begin{equation}
+  \hat{\gamma}_{\mathrm{sym}} = \frac{t}{\kappa + (1 - \kappa)t^2},
+  \label{eq:sm_calibration}
+\end{equation}
+while canonical codes $\sgn(u_i)(1 + m_i) \in \{\pm 1, \pm 2\}$ with inverse norm $(D + 3 s_v)^{-1/2}$ supply legacy scoring paths.
+
+\paragraph{Problem Statement and Comparison Operators.}
+Given $\mathcal{X} \subset \Bball$ ($|\mathcal{X}| = N$) and query $q \in \Bball$, {ANN} search returns $\widehat{\mathcal{N}}_k(q)$ maximizing $\operatorname{Recall@}k = |\widehat{\mathcal{N}}_k(q) \cap \mathcal{N}_k(q)| / k$ against {QPS} and p99 latency.
+By flat comparison-decision stability theory~\cite{xiao2026decisions}, quantized graph indexing depends on sign preservation of two binary operators rather than $|\widehat{P}_{\mathbb{B}} - P_{\mathbb{B}}|$:
+(1)~\emph{shared-query ranking} $\Psi_{\mathrm{rank}}(q; x, y) \triangleq P_{\mathbb{B}}(q, x) - P_{\mathbb{B}}(q, y)$ in beam search, and
+(2)~\emph{shared-target pruning} $\Psi_{\mathrm{prune}}(u, w, v; \alpha) \triangleq \alpha\,d_{\mathbb{B}}(w, v) - d_{\mathbb{B}}(u, v) \le 0$ ($\alpha > 1$) in {Vamana} construction~\cite{subramanya2019diskann}, whose flip probability under $\widehat{\Psi} = \Psi + \Delta\widehat{\Psi}$ is governed by $\MNR(\widehat{\Psi}) \triangleq |\E[\widehat{\Psi}]| / \sqrt{\Var(\Delta\widehat{\Psi})}$~\cite{xiao2026decisions}.

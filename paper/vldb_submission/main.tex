@@ -1,0 +1,124 @@
+% PVLDB Vol. 20 投稿精修版主文件（严格 12 页正文上限，不含参考文献，无附录；已预留 0.5 页总览图余量）
+% 注意：acmart 已内置加载 newtxmath、xcolor 与 hyperref，请勿重复加载 amssymb 以免 \Bbbk 冲突
+
+\documentclass[sigconf, nonacm, balance=false]{acmart}
+
+\usepackage{amsmath,amsthm}
+\usepackage{booktabs,array,multirow,tabularx}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{subcaption}
+\usepackage{microtype}
+
+% 定理、引理、命题与定义环境
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+
+% 排版容差与浮动体紧凑控制，防止双栏窄行公式溢出或跨栏图表留白
+\tolerance=1500
+\emergencystretch=2em
+\widowpenalty=10000
+\clubpenalty=10000
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\floatsep}{6pt plus 2pt minus 2pt}
+\setlength{\dbltextfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\dblfloatsep}{6pt plus 2pt minus 2pt}
+\captionsetup{skip=4pt}
+\graphicspath{{figures/}{../vldb/figures/}}
+
+% 常用数学符号与系统名称宏定义
+\newcommand{\rquiver}{Pelorus}
+\newcommand{\pelorus}{Pelorus}
+\newcommand{\quiver}{QuIVer}
+\newcommand{\Bball}{\mathbb{B}_c^D}
+\newcommand{\Bunit}{\mathbb{B}_1^D}
+\newcommand{\Lmod}{\mathbb{L}_c^D}
+\newcommand{\Sunit}{\mathbb{S}^{D-1}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\Cov}{\operatorname{Cov}}
+\newcommand{\MNR}{\mathrm{MNR}}
+\newcommand{\sgn}{\operatorname{sgn}}
+\newcommand{\arccosh}{\operatorname{arccosh}}
+\newcommand{\atanh}{\operatorname{atanh}}
+\newcommand{\asinh}{\operatorname{asinh}}
+\newcommand{\popcnt}{\operatorname{popcnt}}
+\newcommand{\missing}{\textemdash}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+% PVLDB Vol. 20 元数据配置（单盲投稿）
+\newcommand\vldbdoi{XX.XX/XXX.XX}
+\newcommand\vldbpages{XXX-XXX}
+\newcommand\vldbvolume{20}
+\newcommand\vldbissue{1}
+\newcommand\vldbyear{2027}
+\newcommand\vldbauthors{\authors}
+\newcommand\vldbtitle{\shorttitle}
+\newcommand\vldbavailabilityurl{https://github.com/Astrmira/Pelorus}
+\newcommand\vldbpagestyle{plain}
+
+\begin{document}
+
+\title[Pelorus: Warped-Product Graph Indexing for Hyperbolic Vector Search]{Pelorus: Warped-Product Graph Indexing for Hyperbolic Vector Search}
+
+\author{Wenxuan Xiao}
+\affiliation{%
+  \institution{Astrmira Tech.}
+  \country{China}
+}
+\email{w.xiao@astrmira.com}
+
+\author{Xu Cao}
+\affiliation{%
+  \institution{Astrmira Tech.}
+  \country{China}
+}
+\email{x.cao@astrmira.com}
+
+\begin{abstract}
+\input{sections/abstract}
+\end{abstract}
+
+\maketitle
+
+% PVLDB 官方格式声明块
+\pagestyle{\vldbpagestyle}
+\begingroup\small\noindent\raggedright\textbf{PVLDB Reference Format:}\\
+\vldbauthors. \vldbtitle. PVLDB, \vldbvolume(\vldbissue): \vldbpages, \vldbyear.\\
+\href{https://doi.org/\vldbdoi}{doi:\vldbdoi}
+\endgroup
+\begingroup
+\renewcommand\thefootnote{}\footnote{\noindent
+This work is licensed under the Creative Commons BY-NC-ND 4.0 International License. Visit \url{https://creativecommons.org/licenses/by-nc-nd/4.0/} to view a copy of this license. For any use beyond those covered by this license, obtain permission by emailing \href{mailto:info@vldb.org}{info@vldb.org}. Copyright is held by the owner/author(s). Publication rights licensed to the VLDB Endowment. \\
+\raggedright Proceedings of the VLDB Endowment, Vol. \vldbvolume, No. \vldbissue\ %
+ISSN 2150-8097. \\
+\href{https://doi.org/\vldbdoi}{doi:\vldbdoi} \\
+}\addtocounter{footnote}{-1}\endgroup
+
+\ifdefempty{\vldbavailabilityurl}{}{
+\vspace{.2cm}
+\begingroup\small\noindent\raggedright\textbf{PVLDB Artifact Availability:}\\
+The source code, data, and/or other artifacts have been made available at \url{\vldbavailabilityurl}.
+\endgroup
+}
+
+% 正文模块化章节（严格控制在 11.5 页内，预留 0.5 页供架构总览图挂载）
+\input{sections/introduction}
+\input{sections/preliminaries}
+\input{sections/design}
+\input{sections/system}
+\input{sections/evaluation}
+\input{sections/related}
+\input{sections/conclusion}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}
+\endinput

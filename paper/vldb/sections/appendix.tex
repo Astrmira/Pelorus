@@ -75,7 +75,7 @@ Furthermore, using $\sinh\rho_z = \sqrt{c}\,r_z f_z$ and $\cosh\rho_z = f_z - 1 
   \end{aligned}
 \end{equation}
 where the final equality uses $\sinh^2(t/2) = \frac{1}{2}(\cosh t - 1)$.
-Taking $c \to 0^+$ with fixed $q, v \in \R^D$, $\lim_{c \to 0^+} f_z = 2$, so $\lim_{c \to 0^+} \frac{1}{4}P_{\mathbb{B}}(q, v) = \|q - v\|_2^2$ and $\lim_{c \to 0^+} d_{\mathbb{B}}(q, v) = \|q - v\|_2$. \qed
+Taking $c \to 0^+$ with fixed $q, v \in \R^D$, $\lim_{c \to 0^+} f_z = 2$, so $\lim_{c \to 0^+} \frac{1}{4}P_{\mathbb{B}}(q, v) = \|q - v\|_2^2$ and $\lim_{c \to 0^+} d_{\mathbb{B}}(q, v) = 2\|q - v\|_2$. \qed
 
 \subsection{Complete Proof of Proposition~\ref{prop:geodesic_apex} (Strong Convexity and Constrained Radial Minimization)}
 \begin{proof}
@@ -113,7 +113,7 @@ For any candidate two-level vector $\tilde{u}_i = \sgn(u_{v,i})(a + (b - a)m_{v,
   \|u_v - \tilde{u}\|_2^2
   = \sum_{i \in I_{0,v}}\bigl(|u_{v,i}| - a\bigr)^2 + \sum_{i \in I_{1,v}}\bigl(|u_{v,i}| - b\bigr)^2.
 \end{equation}
-When $0 < s_v < D$, both sums are strictly convex quadratics minimized uniquely at the empirical conditional means $a_v = \frac{1}{D - s_v}\sum_{i \in I_{0,v}} |u_{v,i}|$ and $b_v = \frac{1}{s_v}\sum_{i \in I_{1,v}} |u_{v,i}|$ (and if $s_v = 0$, $I_{1,v} = \emptyset$ and $a_v = \tau_v > 0$; $s_v = D$ is impossible since no finite set can strictly exceed its own arithmetic mean everywhere).
+When $0 < s_v < D$, both sums are strictly convex quadratics minimized uniquely at the empirical conditional means $a_v = \frac{1}{D - s_v}\sum_{i \in I_{0,v}} |u_{v,i}|$ and $b_v = \frac{1}{s_v}\sum_{i \in I_{1,v}} |u_{v,i}|$ For $s_v=0$, the weak mean is uniquely $a_v=\tau_v>0$ and the strong mean is unused. The implementation chooses $b_v=0$, giving $\delta_v=-a_v$. Every reconstructed coordinate uses $a_v$, so the reconstructed vector remains unique. The strict mean threshold implies $s_v<D$ in real arithmetic.
 At $(a_v, b_v)$, setting $\hat{u}_{v,i} = \sgn(u_{v,i})(a_v + \delta_v m_{v,i})$ with $\delta_v = b_v - a_v$ gives:
 \begin{align}
   \langle u_v, \hat{u}_v\rangle
@@ -231,13 +231,13 @@ Substituting $\varepsilon_\angle(q, v) = \eta_q(u_v) + \eta_v(u_q) + \xi_{qv}$ i
   \end{aligned}
 \end{equation}
 At $u_x = u_y$, $\langle e_q, u_y - u_x\rangle = 0$.
-Under $\Cov(e_q) = \frac{\kappa_q}{D}(I_D - u_q u_q^\top)$, $\Var_{e_q}(\eta_q(u_x)) = u_x^\top \Cov(e_q) u_x = \frac{\kappa_q}{D}(1 - \gamma_{qx}^2)$; substituting $W_y - W_x = \frac{2}{c}\sinh\rho_q(\sinh\rho_y - \sinh\rho_x)$ proves~\eqref{eq:cross_shell_var}.
+The first-order query term has variance $(W_y-W_x)^2u_x^\top\Sigma_qu_x$ for $\Sigma_q=\Cov(e_q)$. Under $\Sigma_q=\frac{\kappa_q}{D}(I_D-u_qu_q^\top)$, $\Var_{e_q}(\eta_q(u_x)) = u_x^\top \Cov(e_q) u_x = \frac{\kappa_q}{D}(1 - \gamma_{qx}^2)$; substituting $W_y - W_x = \frac{2}{c}\sinh\rho_q(\sinh\rho_y - \sinh\rho_x)$ proves~\eqref{eq:cross_shell_var}.
 When $|\rho_y - \rho_x| \le \delta_\rho$, $|\sinh\rho_y - \sinh\rho_x| = 2\sinh\frac{|\rho_y - \rho_x|}{2}\cosh\frac{\rho_y + \rho_x}{2} = O(\delta_\rho\cosh\rho_x)$, bounding $(W_y - W_x)^2 = O(\delta_\rho^2 W_x^2)$.
 When $e_q = 0$, $\eta_q \equiv 0$ and $\xi_{qv} \equiv 0$ for all $(r_x, r_y)$.
 
 \textbf{Part (3): Direct $(D+1)$-D {Lorentz}-MIPS suboptimality.}
 On $\Lmod$, $z = (\frac{1}{\sqrt{c}}\cosh\rho_z, \frac{1}{\sqrt{c}}\sinh\rho_z\,u_z)$.
-If $\tilde{z}_v = \frac{1}{\sqrt{c}}\sinh\rho_v\,u_v \in \R^D$ is quantized directly by a coordinate quantizer $\hat{\tilde{z}}_v = \tilde{z}_v + \epsilon_v$ without factoring out $\|\tilde{z}_v\|_2 = \frac{1}{\sqrt{c}}\sinh\rho_v$, the quantization scale is proportional to $\|\tilde{z}_v\|_2$, giving $\Var(\langle \tilde{z}_q, \epsilon_v\rangle) = \Theta(\frac{1}{D}\|\tilde{z}_q\|_2^2 \|\tilde{z}_v\|_2^2) = \Theta(\frac{1}{c^2 D}\sinh^2\rho_q\sinh^2\rho_v)$.
+If $\tilde{z}_v = \frac{1}{\sqrt{c}}\sinh\rho_v\,u_v \in \R^D$ is quantized directly by a coordinate quantizer $\hat{\tilde{z}}_v = \tilde{z}_v + \epsilon_v$ without factoring out $\|\tilde{z}_v\|_2 = \frac{1}{\sqrt{c}}\sinh\rho_v$, the stated model $\Cov(\epsilon_v)=\Theta(\|\tilde z_v\|_2^2/D)I_D$ gives $\Var(\langle \tilde{z}_q, \epsilon_v\rangle) = \Theta(\frac{1}{D}\|\tilde{z}_q\|_2^2 \|\tilde{z}_v\|_2^2) = \Theta(\frac{1}{c^2 D}\sinh^2\rho_q\sinh^2\rho_v)$.
 In particular, when $u_x = u_y = u_q$ ($\theta_{qx} = \theta_{qy} = 0$) with $\rho_x \ne \rho_y$, polar decoupling has $\langle u_q, \hat{u}_x\rangle/\sigma_x^2 = 1$ (or exact radial comparison $R(r_q, r_v)$), whereas direct Lorentz coordinate quantization suffers $\Theta(e^{\rho_q + \max(\rho_x,\rho_y)}/\sqrt{D})$ noise along the radial direction itself and provides no $O(1)$ radial lower bound $P_{\mathrm{rad}}$ prior to scanning $D$ coordinates.
 \end{proof}
 
@@ -287,21 +287,18 @@ If $\hat{d}(x, y) = a\,\tilde{d}(x, y) + b$ with $a > 0, b \ne 0$, then
 \begin{equation}
   \hat{d}(u, v) - \alpha\hat{d}(w, v) = a\bigl(\tilde{d}(u, v) - \alpha\tilde{d}(w, v)\bigr) + (1 - \alpha)b.
 \end{equation}
-Since $\alpha > 1$, $(1 - \alpha)b < 0$ for $b > 0$ (systematically over-pruning valid edges) and $(1 - \alpha)b > 0$ for $b < 0$ (under-pruning redundant edges).
+Since $\alpha > 1$, $(1-\alpha)b<0$ for $b>0$, making the nonnegative pruning-margin test harder and producing under-pruning. For $b<0$, the test becomes easier and produces over-pruning.
 For direct proxy slack $\alpha P_{\mathbb{B}}(w, v) \le P_{\mathbb{B}}(u, v)$, note from~\eqref{eq:psi_prune} that exact geodesic slack requires $P_\alpha(P) = \frac{2}{c}(\cosh(\alpha\arccosh(1 + \frac{c}{2}P)) - 1)$: as $P \to 0^+$, $P_\alpha(P) \sim \alpha^2 P$, whereas as $P \to \infty$, $P_\alpha(P) \sim \frac{1}{c}(c P)^\alpha = c^{\alpha - 1} P^\alpha \gg \alpha P$ since $\alpha > 1$.
-Thus linear proxy slack $\alpha P$ severely underestimates true geodesic $\alpha$-balls at large boundary depths.
+The exact pruning test is $P_\alpha(P(w,v))\le P(u,v)$. Since $P(d)=\frac{2}{c}(\cosh(\sqrt c\,d)-1)$ is strictly convex with $P(0)=0$, $P(\alpha d)>\alpha P(d)$ for $d>0$, $\alpha>1$. Replacing $P_\alpha(P)$ by $\alpha P$ expands the set of accepted dominance pairs and produces over-pruning.
 \end{proof}
 
-\subsection{Reverse-Triangle Shortcut and Flat-Limit Vamana Equivalence}
+\subsection{Reverse-Triangle Shortcut and Channel-Wise Flat Limits}
 \paragraph{Lossless $O(1)$ Reverse-Triangle Shortcut.}
 By the reverse triangle inequality on $(\Bball, d_{\mathbb{B}})$, $\tilde{d}(w, v) = \sqrt{c}\,d_{\mathbb{B}}(w, v) \ge |\sqrt{c}\,d_{\mathbb{B}}(0, w) - \sqrt{c}\,d_{\mathbb{B}}(0, v)| = |\rho_w - \rho_v|$.
 Therefore, if $\alpha|\rho_w - \rho_v| > \tilde{d}_{\mathrm{eff}}(u, v; w)$, we immediately have $\alpha\tilde{d}(w, v) \ge \alpha|\rho_w - \rho_v| > \tilde{d}_{\mathrm{eff}}(u, v; w)$, proving $\neg\operatorname{Dom}_{\mathrm{geo}}(w \mid u, v)$ with zero false rejections and without computing $\arccosh$.
 
-\paragraph{Flat-Limit Equivalence ($c \to 0^+$ or $\Var(\rho) \to 0$).}
-Fix unit-sphere vectors $\{r_0 u_v\}_{v=1}^N$ with constant radius $r_0 > 0$ (or take $c \to 0^+$ at constant norm).
-Then $\rho_v = \rho_0$ for all $v$, so $|\rho_v - \rho_u| = 0 \le \delta_\rho$ for every pair $(u, v)$:
-(i) inward and outward elevator candidate sets $\{v : \rho_v < \rho_u - \epsilon_\rho\}$ and $\{v : \rho_v > \rho_u + \epsilon_\rho\}$ are empty ($q_{\mathrm{in}} = q_{\mathrm{out}} = 0$);
-(ii) $\Delta_{\mathrm{stem}}(u, v; w) = 0$ and $\tilde{d}_{\mathrm{eff}}(u, v; w) = \tilde{d}(u, v)$, while as $c \to 0^+$, $\tilde{d}(x, y)/\sqrt{c} \to r_0\|u_x - u_y\|_2 = r_0\sqrt{2\ell_\angle(x, y)}$, so $\ell_\angle(w, v) \le \ell_\angle(u, v)$ becomes redundant under $\alpha > 1$ and both $\operatorname{Dom}_{\mathrm{geo}}$ and isobathic pruning reduce to standard spherical {Vamana}/{\quiver} pruning. \qed
+\paragraph{Constant-Depth and Flat-Curvature Limits.}
+For constant depth $\rho_v=\rho_0$, both elevator candidate sets are empty and $\Delta_{\mathrm{stem}}=0$. Ring ordering uses angular loss alone, and every selected neighbor satisfies the radial shield. The geodesic channel retains $\alpha d(w,v)\le d(u,v)$, whereas the ring uses $\alpha\ell_\angle(w,v)\le\ell_\angle(u,v)$. In the limit $c\to0^+$ at fixed Euclidean coordinates, $f_z\to2$ and $d_{\mathbb B}(x,y)\to2\|x-y\|_2$. At constant Euclidean radius, the geodesic-channel condition consequently becomes $\alpha^2\ell_\angle(w,v)\le\ell_\angle(u,v)$, while the ring keeps its angular $\alpha$ test. Both channels select spherical diversity at their respective slack values. \qed
 
 \subsection{Degree-$M_0$ and Reachability Invariant of Chord-Swap Island Repair}
 \begin{proposition}[Spanning-Tree Chord-Swap Invariant]
@@ -318,7 +315,7 @@ Hence, whenever every remaining island locates a qualifying anchor $p$, the sing
 Let $T = \{(\texttt{parent}[v], v) : v \in \mathcal{R} \setminus \mathcal{E}\}$ denote the current directed {BFS} spanning tree rooted at $\mathcal{E}$.
 By induction on the {BFS} depth stored in $\texttt{parent}[\cdot]$, every $v \in \mathcal{R}$ retains a directed path from $\mathcal{E}$ inside $T$.
 If $\deg^+(p) < M_0$, appending $p \to u$ preserves $\deg^+(p) \le M_0$, deletes no edges of $G$, and sets $\deg^-(u) \ge 1$.
-If $\deg^+(p) = M_0$, replacing $p \to w^\star$ with $p \to u$ leaves $\deg^+(p) = M_0$ unchanged, raises $\deg^-(u)$ from $0$ to $1$, and decrements $\deg^-(w^\star)$ to $\deg^-(w^\star) - 1 \ge 1$.
+If $\deg^+(p) = M_0$, replacing $p \to w^\star$ with $p \to u$ leaves $\deg^+(p) = M_0$ unchanged, increments $\deg^-(u)$ by one, and decrements $\deg^-(w^\star)$ to $\deg^-(w^\star) - 1 \ge 1$.
 Because the explicit guard $\texttt{parent}[w^\star] \ne p$ ensures $(p, w^\star) \notin T$, $T$ remains an intact subgraph of $G$ and no previously reachable vertex in $\mathcal{R}$ can become disconnected through cycle breakage.
 Since $p \in \mathcal{R}$ stays reachable and $p \to u$ is present, setting $\texttt{parent}[u] = p$ validly extends $T$ to $u$ and, via incremental directed {BFS} from $u$, to every unvisited vertex reachable from $u$, strictly enlarging $|\mathcal{R}|$.
 When every island $u \notin \mathcal{R}$ encountered by the pass obtains a qualifying anchor, no unreachable vertices can remain upon completion.
@@ -329,31 +326,38 @@ When every island $u \notin \mathcal{R}$ encountered by the pass obtains a quali
 
 \subsection{Complete Proof of Theorem~\ref{thm:tangent_cone}}
 \begin{proof}
-\textbf{Part (1): Global {SM} margin collapse.}
-With $r_x = r_y = r$ and $\alpha_x = \alpha_y = \alpha = \sqrt{1 - \beta^2}$, $R(r_q, r_x) = R(r_q, r_y)$ and $\gamma_{qy} - \gamma_{qx} = (\alpha_{q,c}\alpha + \beta_{q,c}\beta\langle \tilde{r}_{q,c}, \tilde{r}_y\rangle) - (\alpha_{q,c}\alpha + \beta_{q,c}\beta\langle \tilde{r}_{q,c}, \tilde{r}_x\rangle) = \beta_{q,c}\beta\Delta_{\tilde{r}}$, giving $|\Psi_{\mathrm{rank}}(q; x, y)| = W\beta_{q,c}\beta|\Delta_{\tilde{r}}|$.
-Under ambient 2-bit {SM} quantization of $u_v = \alpha\mu_c + \beta\tilde{r}_v$, for generic $\mu_c$ with non-vanishing coordinate magnitudes bounded away from $0$ and $\tau(\mu_c)$ on a constant fraction of coordinates, $\beta \to 0$ leaves $s_v = s(\mu_c)$ and $m_v = m(\mu_c)$ unchanged on $1 - O(\beta)$ of coordinates while tangent perturbations flip at most $O(D\beta)$ boundary coordinates with quantization step $\Theta(1/\sqrt{D})$, yielding quantization error variance $\Omega(\kappa_{\mathrm{SM}}/D)$ along generic tangent query directions (or zero resolution once $\beta$ falls below coordinate threshold spacing, where distinct intra-cone points collide onto identical 2-bit codes).
-Multiplying by $W$ yields $\sqrt{\Var(\Delta\widehat{\Psi}_{\mathrm{global}})} = \Omega(W\sqrt{\kappa_{\mathrm{SM}}/D})$ and~\eqref{eq:mnr_collapse}.
+\textbf{Part (1).}
+For equal radial and axial coordinates, subtracting~\eqref{eq:tangent_inner} gives $\gamma_{qy}-\gamma_{qx}=\beta_{q,c}\beta\Delta_{\tilde r}$. Global proxy error is $-Wg_v$, so the comparison-error variance is $W^2\Var(g_y-g_x)=W^2V_g$. Division by its standard deviation proves~\eqref{eq:mnr_collapse}. The covariance term captures the shared query, common bitplanes, and threshold crossings of nearby candidates.
 
-\textbf{Part (2): Fixed-budget pool-dilution recall inversion.}
-Suppose beam traversal of width $L$ visits $N_c(L) \ge B$ vertices from cone $c$ (where inter-cone separation keeps out-of-cone vertices at much larger proxy values), including $k_{\mathrm{vis}}(L) \le k$ true top-$k$ neighbors.
-Write each intra-cone candidate's approximate score as $\widehat{P}(q, v_j) = P_0 + W\beta_{q,c}\beta\,g_j + W\xi_j$, where $|g_j| \le 2$ and $\{\xi_j\}_{j=1}^{N_c(L)}$ are exchangeable noise variables with scale $\sigma_\xi = \Theta(\sqrt{\kappa_{\mathrm{SM}}/D})$.
-As $\beta_{q,c}\beta / \sigma_\xi \to 0$ ($\MNR_{\mathrm{global}} \to 0$) with continuous tie-breaking, the induced rank order of $\{\widehat{P}(q, v_j)\}_{j=1}^{N_c(L)}$ converges in distribution to a uniform random permutation of $\{1, \dots, N_c(L)\}$.
-Selecting the smallest $B$ proxy values therefore samples a uniform hypergeometric subset of size $B$ from $N_c(L)$ items, so expected true-neighbor admission into $F_B(q)$ converges to
+\textbf{Part (2).}
+Condition on the retained cone pool and its true-neighbor membership. Under uniform score ranks, every member has probability $B/N_c(L)$ of occupying a rerank slot. Let $I_v$ indicate admission of true neighbor $v$. Linearity of expectation gives
 \begin{equation}
-  \begin{aligned}
-    &\E\bigl[|G_k(q) \cap F_B(q)| \;\big|\; k_{\mathrm{vis}}(L), N_c(L)\bigr] \\
-    &\xrightarrow{\;\MNR_{\mathrm{global}} \to 0\;}
-      k_{\mathrm{vis}}(L)\cdot \min\!\left(1,\; \frac{B}{N_c(L)}\right).
-  \end{aligned}
+ \mathbb E\!\left[\sum_{v\in G_k\cap C_L\cap c}I_v\right]
+ =\sum_{v\in G_k\cap C_L\cap c}\frac{B}{N_c(L)}
+ =\frac{B k_c(L)}{N_c(L)}.
 \end{equation}
-Once $k_{\mathrm{vis}}(L)$ saturates near $k$ (e.g., $93.9\%$ already visited at $L=256$ on {Clustered-Narrow}) while expanding $L$ from $256$ to $2{,}048$ continues admitting hundreds of additional intra-cone distractors into $N_c(L)$, $B / N_c(L)$ drops sharply, proving non-monotonic recall inversion with respect to $L$ at fixed $B$.
+Taking the ratio at two widths proves the stated decrease condition. For arbitrary ranks the same identity is $\mathbb E[|G_k\cap F_B|\mid C_L]=\sum_{v\in G_k\cap C_L}\Pr(v\in F_B\mid C_L)$. The implementation orders score ties deterministically, and the four-stage audit measures these actual admission counts.
 
-\textbf{Part (3): Local tangent-cone {$\MNR$} recovery.}
-Under~\eqref{eq:cone_estimator}, $\alpha_{q,c} = \langle u_q, \mu_c\rangle$ and $\alpha_v$ are stored/computed in FP32, so $\beta_{q,c} = \sqrt{1 - \alpha_{q,c}^2}$ and $\beta_v = \sqrt{1 - \alpha_v^2}$ are exact up to machine precision ($< 10^{-7}$).
-Let $\tilde{e}_v = \hat{\gamma}_{\mathrm{asym}}(\tilde{r}_{q,c}, \tilde{r}_v) - \langle \tilde{r}_{q,c}, \tilde{r}_v\rangle$ denote the 2-bit {SM} estimation error on the unit $(D-2)$-sphere $T_{\mu_c}\Sunit \cap \Sunit$, which has variance $\kappa_{\mathrm{SM}}/D$ since $\|\tilde{r}_{q,c}\|_2 = \|\tilde{r}_v\|_2 = 1$.
-Then $\widehat{P}_{\mathrm{cone}}(q, v) - P_{\mathbb{B}}(q, v) = -W\beta_{q,c}\beta_v \tilde{e}_v$.
-For distinct tangent directions $\tilde{r}_x, \tilde{r}_y$ with $\beta_x = \beta_y = \beta$, $\Delta\widehat{\Psi}_{\mathrm{cone}} = W\beta_{q,c}\beta(\tilde{e}_y - \tilde{e}_x)$ has standard deviation $\sqrt{2\kappa_{\mathrm{SM}}/D}\,W\beta_{q,c}\beta$, and dividing $|\Psi_{\mathrm{rank}}| = W\beta_{q,c}\beta|\Delta_{\tilde{r}}|$ by this standard deviation cancels $W\beta_{q,c}\beta$ identically to yield~\eqref{eq:mnr_recovery}.
+\textbf{Part (3).}
+Subtract~\eqref{eq:tangent_inner} from~\eqref{eq:cone_estimator}. The axial product cancels and yields $\hat\gamma_{\mathrm{cone}}-\gamma=\beta_{q,c}\beta_v e_v$ for every pair. For equal $\beta_x=\beta_y=\beta$, comparison-error variance is $W^2\beta_{q,c}^2\beta^2V_r$. Cancelling $W\beta_{q,c}\beta$ proves~\eqref{eq:mnr_recovery}. Equal marginal variances $\kappa_{\mathrm{SM}}/D$ with correlation $\varrho$ give $V_r=2\kappa_{\mathrm{SM}}(1-\varrho)/D$ by direct substitution.
 \end{proof}
+
+\subsection{FP32 Polar and Axial Scalar Perturbations}
+\label{app:scalar_rounding}
+Polar headers store scalars computed in FP64 and rounded independently to FP32. The implementation stores $F=f/2$, so the following bounds for $f$ apply to twice the stored boundary factor. For a normal finite scalar, round-to-nearest gives $|\delta r|\le u_{32}|r|$ and $|\delta f|\le u_{32}|f|$, where $u_{32}=2^{-24}$. In particular, the stored conformal factor retains relative error at most $u_{32}$ from this final conversion.
+For an FP64 query, define $A=r_q^2+r^2-2r_qr\gamma$ and $T=2|r-r_q\gamma|\epsilon_r+\epsilon_r^2$, with $\epsilon_r=u_{32}|r|$ and $\epsilon_f=u_{32}|f|$. Header conversion changes the real-valued proxy by at most
+\begin{equation}
+ |\widetilde P-P|\le f_q\bigl[fT+\epsilon_f(A+T)\bigr].
+ \label{eq:header_rounding}
+\end{equation}
+Indeed, replacing $r$ by $r+\delta r$ changes $A$ by $2(r-r_q\gamma)\delta r+\delta r^2$, and multiplying by $f+\delta f$ gives the bound. Setting $\gamma=1$ gives the radial-gate perturbation. With the mapped-data evaluation clamp $r\le1-10^{-6}$ at $c=1$, $f\le1{,}000{,}000.501$ and $\epsilon_f\le0.059605$.
+For an axial scalar $\tilde\alpha=\alpha+\delta\alpha$ clipped to $[-1,1]$, define $\tilde\beta=\sqrt{1-\tilde\alpha^2}$. Then
+\begin{equation}
+ |\tilde\beta-\beta|
+ =\frac{|2\alpha\delta\alpha+(\delta\alpha)^2|}{\tilde\beta+\beta}
+ \label{eq:axial_rounding}
+\end{equation}
+whenever the denominator is positive. The cone scorer clips the square-root argument at zero and uses the axial product for a degenerate residual. Final reranking evaluates the original FP32 coordinates with FP64 accumulation.
 
 \subsection{Off-Axis CJ-Gate Jacobian and $5.49\times$ Underestimation Counterexample}
 From $P_{\mathbb{B}}(q, v) = R(r_q, r_v) + 2 r_q r_v f_q f_v(1 - \gamma_{qv})$ and~\eqref{eq:cone_estimator}, only $\hat{\gamma}_{\mathrm{asym}}(\tilde{r}_{q,c}, \tilde{r}_v)$ carries quantization uncertainty $\sigma_0 = \sqrt{\kappa_{\mathrm{SM}}/D}$, multiplied by $\frac{\partial \hat{\gamma}_{\mathrm{cone}}}{\partial \hat{\gamma}_{\mathrm{asym}}} = \beta_{q,c}\beta_v$ and $\bigl|\frac{\partial P_{\mathbb{B}}}{\partial \gamma_{qv}}\bigr| = 2 r_q r_v f_q f_v$, proving~\eqref{eq:cj_sigma}.
@@ -411,6 +415,5 @@ Hence $G_k(q) \cap (F_B(q) \setminus R_k(q)) = \emptyset$ and $\mathcal{L}_{\mat
 \end{table}
 
 Table~\ref{tab:app_stage_audit} reports the controlled fixed-budget ablation ($L=256, B=128$, independent Zen~4 graph builds per configuration) on {Clustered-Narrow}:
-on the diagnostic subset, {Global-SM} traversal without tangent-cone rescue or adaptive gating visits $93.9\%$ of true neighbors ($\mathcal{L}_{\mathrm{reach}} = 6.1\%$) yet loses $44.6\%$ inside the bounded $L$-beam ($\mathcal{L}_{\mathrm{beam}}$) and $16.3\%$ at pool gating ($\mathcal{L}_{\mathrm{gate}}$, $33.0\%$ subset / $34.22\%$ full Recall@10);
-expanding rerank plateau budgets alone (+\,\textsc{CJ-Gate} Only) eliminates $\mathcal{L}_{\mathrm{gate}}$ and lifts full-benchmark recall only from $34.22\%$ to $50.59\%$ because $\mathcal{L}_{\mathrm{beam}} = 44.6\%$ of true neighbors were already evicted from $C_L(q)$ during beam maintenance;
-by contrast, restoring intra-cone {$\MNR$} at the representation level via \texttt{ResidualConeDict} eliminates both $\mathcal{L}_{\mathrm{beam}}$ and $\mathcal{L}_{\mathrm{gate}}$, reaching $99.37\%$ (with \textsc{CJ-Gate}, $1{,}958$\,QPS) and $99.39\%$ Recall@10 under \rquiver{} ($1{,}840$\,QPS 1T and $38{,}876$\,QPS 24T, climbing to $99.80\%$ at $L=384, B=128$) with zero per-vertex memory increase.
+on the diagnostic subset, {Global-SM} traversal without tangent-cone rescue or adaptive gating visits $93.9\%$ of true neighbors ($\mathcal{L}_{\mathrm{reach}} = 6.1\%$) yet loses $44.6\%$ inside the bounded $L$-beam ($\mathcal{L}_{\mathrm{beam}}$) and $16.3\%$ at pool gating ($\mathcal{L}_{\mathrm{gate}}$, $33.0\%$ subset / $34.22\%$ full Recall@10).
+The full-query measurements raise recall from $34.22\%$ to $50.59\%$ with \textsc{CJ-Gate} alone ($1{,}884$\,QPS). Residual encoding with \textsc{CJ-Gate} reaches $99.365\%$ ($1{,}958$\,QPS), and full \rquiver{} reaches $99.385\%$ ($1{,}840$\,QPS 1T and $38{,}876$\,QPS 24T). At $L=384,B=128$, full-method recall is $99.80\%$. Residual encoding reuses the existing per-vertex bitplanes and header slots.

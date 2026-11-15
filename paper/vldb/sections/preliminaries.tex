@@ -65,6 +65,7 @@ By the hyperbolic law of cosines, $\frac{c}{4}P_{\mathbb{B}}(q, v) = \sinh^2\!\b
   \label{eq:proxy_to_geodesic}
 \end{equation}
 Because $z \mapsto \frac{2}{\sqrt{c}}\asinh\bigl(\frac{1}{2}\sqrt{c z}\bigr)$ is strictly increasing on $[0, \infty)$, $P_{\mathbb{B}}(q, v)$ is strictly order-isomorphic to $d_{\mathbb{B}}(q, v)$, deferring transcendental evaluations to the final $k$ returned neighbors.
+The implementation stores $F_v=f_v/2=(1-cr_v^2)^{-1}$ and evaluates $P_{\mathrm{impl}}=P_{\mathbb B}/4$, with $d=2\asinh(\sqrt{cP_{\mathrm{impl}}})/\sqrt c$. All beam thresholds, radial gates, and Jacobian scales use this normalization consistently.
 Furthermore, in the flat-curvature limit $c \to 0^+$, $f_x \to 2$ and $\frac{1}{4}P_{\mathbb{B}}(q, v) \to \|q - v\|_2^2$, recovering flat Euclidean and spherical geometry continuously.
 
 \subsection{Exact Two-Level Spherical SM Geometry and Decision Operators}
@@ -72,14 +73,14 @@ Furthermore, in the flat-curvature limit $c \to 0^+$, $f_x \to 2$ and $\frac{1}{
 
 \paragraph{Deterministic Conditional-Mean Two-Level {SM} Reconstruction.}
 In polar coordinates, $u_v \in \Sunit$ lies on the unit sphere independently of $r_v$.
-Following {\quiver}~\cite{xiao2026quiver}, training-free 2-bit {SM} encodes each coordinate $u_{v,i}$ ($i \in \{1,\dots,D\}$) into two packed bitplanes:
+Following {\quiver}'s training-free 2-bit {SM} bitplane encoding~\cite{xiao2026quiver}---whose conditional-mean Pythagorean identity (Lemma~\ref{lem:sm_pythagorean}) underpins our orthogonal-projection refinement (\S\ref{sec:system})---each coordinate $u_{v,i}$ ($i \in \{1,\dots,D\}$) is encoded into two packed bitplanes:
 a sign bit $s_{v,i} = \mathbb{I}[u_{v,i} \ge 0]$ and a strong-magnitude bit $m_{v,i} = \mathbb{I}[|u_{v,i}| > \tau_v]$ relative to the L1 mean threshold $\tau_v = \frac{1}{D}\sum_{j=1}^D |u_{v,j}|$, with strong-bit count $s_v = \sum_{i=1}^D m_{v,i}$.
-Partitioning $\{1,\dots,D\}$ into weak indices $I_{0,v} = \{i : m_{v,i} = 0\}$ ($|I_{0,v}| = D - s_v$) and strong indices $I_{1,v} = \{i : m_{v,i} = 1\}$ ($|I_{1,v}| = s_v$) defines conditional magnitude means $a_v = \frac{1}{D - s_v}\sum_{i \in I_{0,v}} |u_{v,i}|$ ($0$ if $s_v = D$), $b_v = \frac{1}{s_v}\sum_{i \in I_{1,v}} |u_{v,i}|$ ($0$ if $s_v = 0$), and step $\delta_v = b_v - a_v \ge 0$.
+Partitioning $\{1,\dots,D\}$ into weak indices $I_{0,v} = \{i : m_{v,i} = 0\}$ ($|I_{0,v}| = D - s_v$) and strong indices $I_{1,v} = \{i : m_{v,i} = 1\}$ ($|I_{1,v}| = s_v$) defines conditional magnitude means $a_v = \frac{1}{D - s_v}\sum_{i \in I_{0,v}} |u_{v,i}|$ ($0$ if $s_v = D$), $b_v = \frac{1}{s_v}\sum_{i \in I_{1,v}} |u_{v,i}|$ ($0$ if $s_v = 0$), and step $\delta_v=b_v-a_v$. For $0<s_v<D$, $\delta_v\ge0$. At $s_v=0$, the implementation sets the unused strong mean to $b_v=0$, so $\delta_v=-a_v$ and all reconstructed coordinates use $a_v$.
 
 \begin{lemma}[Deterministic Two-Level {SM} Pythagorean Identity]
 \label{lem:sm_pythagorean}
 For any $u_v \in \Sunit$, let $\hat{u}_v \in \R^D$ be the conditional-mean two-level vector $\hat{u}_{v,i} = \sgn(u_{v,i})(a_v + \delta_v m_{v,i})$ (setting $\sgn(0) = +1$).
-Then, with zero distributional assumptions on $u_v$, $(a_v, \delta_v)$ uniquely minimizes $\|u_v - \tilde{u}\|_2^2$ over all two-level vectors sharing bitplanes $(s_v, m_v)$, and satisfies
+Then, with zero distributional assumptions on $u_v$, the reconstructed vector $\hat u_v$ uniquely minimizes $\|u_v - \tilde{u}\|_2^2$ over all two-level vectors sharing bitplanes $(s_v,m_v)$. The populated-group means are unique, and the reconstruction satisfies
 \begin{equation}
   \begin{aligned}
     \langle u_v, \hat{u}_v\rangle &= (D - s_v)a_v^2 + s_v b_v^2 \\
@@ -97,7 +98,13 @@ Because $\sgn(u_{v,i}) u_{v,i} = |u_{v,i}|$, splitting $\langle u_v, \hat{u}_v\r
 Expanding $\sgn_q \sgn_v = 2\bar{x}_i - 1$ over $\{1, m_q, m_v, m_q m_v\}$ yields the five-popcount identity.
 \end{proof}
 
-When scalar parameters $(a_v, \delta_v)$ are further compressed to canonical integer levels $\tilde{q}_{\mathrm{SM}}(u_v)_i = \sgn(u_{v,i})(1 + 2 m_{v,i}) \in \{\pm 1, \pm 3\}$ ($\|\tilde{q}_{\mathrm{SM}}(u_v)\|_2 = \sqrt{D + 8 s_v}$) during ultra-compact storage, \rquiver{} applies endpoint-preserving rational calibration $\hat{\gamma}_{\mathrm{cal}}(c) = \frac{c}{\kappa_{\mathrm{cal}} + (1 - \kappa_{\mathrm{cal}})c^2}$ ($\kappa_{\mathrm{cal}} = 0.80$, fixing $0$ and $\pm 1$) to correct Jensen shrinkage on normalized inner products $c = \langle \hat{u}_q, \hat{u}_v\rangle / (\sigma_q \sigma_v)$.
+The main hop scorer uses the conditional-mean five-popcount product from Lemma~\ref{lem:sm_pythagorean}. With $t=\operatorname{clip}_{[-1,1]}(\langle\hat u_q,\hat u_v\rangle/(\sigma_q\sigma_v))$, it applies
+\begin{equation}
+  \hat\gamma_{\mathrm{sym}}=\frac{t}{\kappa+(1-\kappa)t^2},\qquad
+  \kappa=\operatorname{clip}_{[0.5,1]}(\sigma_q\sigma_v).
+  \label{eq:sm_calibration}
+\end{equation}
+The FP32 norms are precomputed at ingestion. The canonical code $\operatorname{sgn}(u_i)(1+m_i)\in\{\pm1,\pm2\}$, with inverse norm $(D+3s)^{-1/2}$, supplies legacy scoring paths. Training-free encoding computes bitplanes and conditional means directly from each vector. Cone-axis fitting uses the deterministic sample procedure in \S\ref{subsec:polar_layout}.
 
 \paragraph{Problem Statement and Discrete Comparison Operators.}
 Given $N$ database points $\mathcal{X} \subset \Bball$ and query $q \in \Bball$, exact top-$k$ retrieval returns $\mathcal{N}_k(q)$ minimizing $d_{\mathbb{B}}(q, v)$, and {ANN} accuracy is evaluated via $\operatorname{Recall@}k = |\widehat{\mathcal{N}}_k(q) \cap \mathcal{N}_k(q)| / k$ against throughput ({QPS}) and p99 latency.
