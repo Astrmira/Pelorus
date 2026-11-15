@@ -8,7 +8,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-**Pelorus** is an in-memory Rust approximate nearest neighbor (ANN) engine designed for native **Poincaré ball** ($\mathbb{B}_c^D$) hyperbolic search (as well as standard cosine similarity). It bridges the fidelity–memory dilemma in million-scale non-Euclidean retrieval by decoupling hyperbolic embeddings into a warped product $\mathbb{R}_{\ge 0} \times \mathbb{S}^{D-1}$, combining compact 2-bit Sign-Magnitude (SM) spherical codes with exact unquantized radial/conformal metadata and full-precision tail reranking.
+**Pelorus** is an in-memory Rust approximate nearest neighbor (ANN) engine designed for native **Poincaré ball** ($`\mathbb{B}_c^D`$) hyperbolic search (as well as standard cosine similarity). It bridges the fidelity–memory dilemma in million-scale non-Euclidean retrieval by decoupling hyperbolic embeddings into a warped product $`\mathbb{R}_{\ge 0} \times \mathbb{S}^{D-1}`$, combining compact 2-bit Sign-Magnitude (SM) spherical codes with exact unquantized radial/conformal metadata and full-precision tail reranking.
 
 > **Package Naming Note:** This repository and its accompanying paper use the project name **Pelorus**; for compatibility with frozen benchmark harnesses and existing callers, the Rust crate currently keeps the package name `quiver-ann` (`use quiver_ann::...`). See [`docs/source-migration.md`](docs/source-migration.md) for historical symbol and directory mappings.
 
@@ -47,7 +47,7 @@ Measured on isolated **AMD EPYC 9654 (Zen 4)** Linux containers (32 build thread
 
 <sub>*Split hot-navigation allocation; 4096 B page-co-located (`HotSmPage`) footprints are 517.0 MB (Cohere-1M), 516.8 MB (MERU-1M), 765.6 MB (OpenAI-1536), and 32.8 MB (WordNet-Hazy).</sub>
 
-> **Applicability Boundary (`Uniform-Narrow`)**: On isotropic narrow shells ($\rho \in [3.9, 4.1]$ with zero clusters), cone residuals cannot activate and 2-bit spherical margin-to-noise bounds peak Recall@10 at **64.735%**, whereas unquantized `HyperspaceDB FP32 flat` reaches **92.170%**. Full-precision or 8-bit representations remain preferable for uniformly distributed thin hyperbolic shells.
+> **Applicability Boundary (`Uniform-Narrow`)**: On isotropic narrow shells ($`\rho \in [3.9, 4.1]`$ with zero clusters), cone residuals cannot activate and 2-bit spherical margin-to-noise bounds peak Recall@10 at **64.735%**, whereas unquantized `HyperspaceDB FP32 flat` reaches **92.170%**. Full-precision or 8-bit representations remain preferable for uniformly distributed thin hyperbolic shells.
 
 ---
 
@@ -144,7 +144,7 @@ fn main() -> quiver_ann::Result<()> {
 }
 ```
 
-- **Coordinates & IDs**: Vectors are stored row-major; external IDs are unique `u64` values (`0` is supported). In Poincaré mode, curvature `c` must be finite and positive, and coordinates must satisfy $c\|x\|_2^2 < 1$.
+- **Coordinates & IDs**: Vectors are stored row-major; external IDs are unique `u64` values (`0` is supported). In Poincaré mode, curvature `c` must be finite and positive, and coordinates must satisfy $`c\|x\|_2^2 < 1`$.
 - **Scoring & Exact Scan**: `search` returns `(id, score)` sorted in descending order—cosine similarity in cosine mode and negative geodesic distance in hyperbolic mode. `search_exact` performs a full scan under the same metric, deletion mask, and score convention.
 - **Parallelism & Memory Accounting**: Graph construction uses the active Rayon thread pool. `navigation_storage_bytes()` reports the payload size of the graph and navigation state separately from raw vectors.
 
