@@ -1,4 +1,4 @@
-% 第四章：翘曲乘积极坐标二比特表示、主干余量四向黎曼罗盘拓扑、零孤岛弦交换修复与极坐标路由
+% 第四章：翘曲乘积极坐标二比特表示、主干余量 QuadriPrune 四向剪枝拓扑、零孤岛弦交换修复与极坐标路由
 \section{Warped-Product Representation and Graph Topology}
 \label{sec:design}
 
@@ -11,8 +11,8 @@ Guided by Theorems~\ref{thm:conformal_flip}--\ref{thm:tangent_cone} and Proposit
 For each vertex $v \in \{0, \dots, N-1\}$, \rquiver{} stores a fixed 32-byte polar header (half a 64-byte cache line) paired with packed 2-bit {SM} bitplanes occupying $2\lceil D / 64\rceil \times 8$ bytes:
 \begin{itemize}
   \item \emph{Exact radial scalars (12\,B):} Euclidean radius $r_v \in [0, 1/\sqrt{c})$, conformal factor $f_v = \frac{2}{1 - c r_v^2}$, and dimensionless geodesic depth $\rho_v = 2\atanh(\sqrt{c}\,r_v)$, computed in FP64 at ingestion and stored in FP32.
-  \item \emph{Bitpacked cone and two-level {SM} scalars (12\,B):} a 32-bit word packing the 20-bit strong-magnitude count $s_v$ with a 12-bit residual cone tag ($\text{cone\_id} + 1$, where $0$ denotes global native {SM}), two-level {SM} parameters $(a_v, \delta_v)$ (or inverse norm $(D + 8 s_v)^{-1/2}$), and FP32 axial alignment $\alpha_v = \langle u_v, \mu_c\rangle$.
-  \item \emph{Routing tags (8\,B):} radial shell index ($1$\,B), coarse Tammes cone ($1$\,B), fine Tammes cone ($2$\,B), and alignment padding ($4$\,B).
+  \item \emph{Conditional-mean two-level {SM} scalars (12\,B):} weak-coordinate mean $a_v$, level step $\delta_v = b_v - a_v$, and reconstructed two-level norm $\sigma_v = \|\hat{u}_v\|_2$ in FP32 (Lemma~\ref{lem:sm_pythagorean}).
+  \item \emph{Bitpacked count/cone tag and axial/norm scalar (8\,B):} a 32-bit word packing the 20-bit strong-magnitude count $s_v$ with a 12-bit residual cone tag ($\text{cone\_id}$, with \texttt{0x0FFF} denoting global native {SM}), paired with an FP32 field storing axial alignment $\alpha_v = \langle u_v, \mu_c\rangle$ for residual-cone vertices or precomputed canonical inverse norm $(D + 8 s_v)^{-1/2}$ for global vertices (feeding canonical $\{\pm 1, \pm 3\}$ hop scoring while $(a_v, \delta_v, \sigma_v)$ feeds \textsc{Stage-0.5} with zero extra fetches).
 \end{itemize}
 Table~\ref{tab:node_layout} compares hot navigation memory at $D = 768$ and maximum out-degree $M_0 = 32$: \rquiver{} requires $352$\,B of logical payload per vertex ($485.0$\,MB total at $N = 10^6$ including CSR headers and router metadata), which is $2.60\times$ smaller than 8-bit polar scalar quantization ({Polar-SQ8}) and $7.35\times$ smaller than touching full FP32 vectors during traversal, while $4096$\,B \texttt{HotSmPage} co-location with \texttt{SymSketch256} ($+32$\,B/vertex) uses $517.0$\,MB total ($2.44\times$ smaller than {Polar-SQ8}).
 
@@ -43,10 +43,10 @@ To realize Theorem~\ref{thm:tangent_cone}(3) without disturbing unclustered mani
   \item \emph{Leader seeding and two-round purity refinement:} Otherwise, a deterministic spherical leader pass collects candidate unit axes separated by cosine $< \tau_{\mathrm{lead}} = 0.91$ (capped at $1{,}024$ candidates), followed by two rounds of spherical mean refinement assigning samples with $\langle u_s, \mu_c\rangle \ge \alpha_{\min} = 0.94$.
   A cone $\mu_c$ is retained if and only if it meets minimum sample support $\operatorname{clamp}(\lfloor N_{\mathrm{samp}}/1024\rfloor, 3, 12)$ and achieves high intra-cone mean alignment $\bar{\alpha}_c \ge 0.955$.
 \end{enumerate}
-Every database vertex $v$ achieving $\alpha_v = \langle u_v, \mu_c\rangle \ge 0.94$ against its nearest retained axis stores the 2-bit {SM} code of its normalized tangent residual $\tilde{r}_v = (u_v - \alpha_v\mu_c)/\sqrt{1 - \alpha_v^2}$ in the existing 192-byte bitplane slot and records $\text{cone\_id} + 1$ in the 12-bit header field (\textbf{0\,B/vertex} overhead), guaranteeing $1 - \alpha_v^2 \le 0.116$ ($\ge 8.6\times$ angular variance compression).
+Every database vertex $v$ achieving $\alpha_v = \langle u_v, \mu_c\rangle \ge 0.94$ against its nearest retained axis stores the 2-bit {SM} code of its normalized tangent residual $\tilde{r}_v = (u_v - \alpha_v\mu_c)/\sqrt{1 - \alpha_v^2}$ in the existing 192-byte bitplane slot and records $\text{cone\_id}$ in the 12-bit header field (with \texttt{0x0FFF} reserved for global {SM}, \textbf{0\,B/vertex} overhead), guaranteeing $1 - \alpha_v^2 \le 0.116$ ($\ge 8.6\times$ angular variance compression).
 On diffuse or moderately anisotropic manifolds ({Cohere-1M}, {MERU-1M}, isotropic spheres), zero cones satisfy $\bar{\alpha}_c \ge 0.955$, so \rquiver{} defaults cleanly to global {SM}, whereas on concentrated boundary clusters all $256$ tight cones are captured within $\le 0.50$\,MiB globally.
 
-\subsection{Inside-Out Seeding and Stem-Excess 4-Way Riemannian Compass}
+\subsection{Inside-Out Seeding and Stem-Excess QuadriPrune}
 \label{subsec:compass}
 
 By Theorem~\ref{thm:vamana_pathologies}(1), single-metric {Vamana} pruning allows interior vertices to occlude entire spherical neighborhoods of boundary vertices.
@@ -64,22 +64,20 @@ Algorithm~\ref{alg:compass_build} replaces isotropic pruning with an inside-out 
 \For{parallel radial wave $B_t \subset \pi$ ordered inside-out}
   \For{each $u \in B_t$ in parallel}
     \State $\mathcal{C}_u \gets \textsc{PolarBeamSearch}(G, u, L_c)$ via 2-bit polar proxy $\widehat{P}_{\mathbb{B}}$
-    \State Select up to $M_0$ outgoing edges from $\mathcal{C}_u$ via \textbf{4-Way Compass}:
+    \State Partition up to $M_0$ outgoing edges from $\mathcal{C}_u$ via \textbf{QuadriPrune}:
     \State \hspace{0.8em}(a) \emph{Geodesic fiber} ($q_{\mathrm{geo}} = \lfloor \frac{3}{8}M_0\rfloor$): stem-excess prune~\eqref{eq:dom_geo}
     \State \hspace{0.8em}(b) \emph{Shielded isobathic ring} ($|\rho_v - \rho_u| \le \delta_\rho$, up to $\lfloor \frac{7}{8}M_0\rfloor$): spherical prune shielded from off-shell hubs ($|\rho_w - \rho_u| > \delta_\rho$)
-    \State \hspace{0.8em}(c) \emph{Inward/outward elevators} ($q_{\mathrm{in}}, q_{\mathrm{out}}$): step-aligned radial transitions minimizing~\eqref{eq:elevator_obj}
-    \State Insert reverse edges $v \to u$ for $v \in N^+(u)$, re-applying Compass prune when $\deg^+(v) > M_0$
+    \State \hspace{0.8em}(c)--(d) \emph{Inward \& outward elevators} ($q_{\mathrm{in}}, q_{\mathrm{out}}$): step-aligned inward and outward radial transitions minimizing~\eqref{eq:elevator_obj}
+    \State Insert reverse edges $v \to u$ for $v \in N^+(u)$, re-applying {QuadriPrune} when $\deg^+(v) > M_0$
   \EndFor
 \EndFor
-\For{sweep $s = 1, 2, 3$} \Comment{Spanning-tree chord-swap repair (\S\ref{subsec:repair})}
-  \State $\mathcal{R} \gets \textsc{DirectedBFS}(G, \text{RouterEntries})$
-  \If{$|\mathcal{R}| = N$} \textbf{break} \EndIf
-  \For{each unreachable island $u \in V \setminus \mathcal{R}$}
-    \State Locate nearest reachable anchor $p \in \mathcal{R}$ via polar beam search
-    \If{$\deg^+(p) < M_0$} append $p \to u$
-    \Else\ replace $p \to w^\star$ maximizing $\widehat{P}_{\mathbb{B}}(p, w)$ s.t.\ $\deg^-(w^\star) \ge 2$ with $p \to u$
-    \EndIf
-  \EndFor
+\State $(\mathcal{R}, \texttt{parent}) \gets \textsc{DirectedBFSTree}(G, \text{RouterEntries})$ \Comment{Island repair (\S\ref{subsec:repair})}
+\For{each $u \in \pi$ with $u \notin \mathcal{R}$}
+  \State Select reachable anchor $p \in \mathcal{R}$ from $N^+(u)$, hubs, or interior core
+  \If{$\deg^+(p) < M_0$} append $p \to u$
+  \Else\ replace peripheral chord $p \to w^\star$ s.t.\ $\texttt{parent}[w^\star] \ne p \land \deg^-(w^\star) \ge 2$ with $p \to u$
+  \EndIf
+  \State $\texttt{parent}[u] \gets p$; expand $(\mathcal{R}, \texttt{parent})$ via incremental {BFS} from $u$
 \EndFor
 \State \Return CSR-compacted graph $G$ and $4096$\,B \texttt{HotSmPage} layout
 \end{algorithmic}
@@ -103,32 +101,32 @@ Neighbor $w$ geodesically dominates candidate $v$ ($\operatorname{Dom}_{\mathrm{
   \bigl[\alpha\,\tilde{d}(w, v) \le \tilde{d}_{\mathrm{eff}}(u, v; w)\bigr].
   \label{eq:dom_geo}
 \end{equation}
-Condition $\ell_\angle(w, v) \le \ell_\angle(u, v)$ forbids $w$ from pruning candidates at wider spherical angles than $u$ itself (eliminating $180^\circ$ cross-origin black-hole occlusion), while subtracting $\Delta_{\mathrm{stem}}$ ensures $w$ shadows $v$ through genuine angular proximity rather than radial depth advantage alone.
+Condition $\ell_\angle(w, v) \le \ell_\angle(u, v)$ forbids $w$ from pruning candidates at wider spherical angles than $u$ itself (preventing $180^\circ$ cross-origin occlusion), while subtracting $\Delta_{\mathrm{stem}}$ ensures $w$ shadows $v$ through genuine angular proximity rather than radial depth advantage alone.
 Moreover, because $\tilde{d}(w, v) \ge |\rho_w - \rho_v|$ by the reverse triangle inequality, checking $\alpha|\rho_w - \rho_v| > \tilde{d}_{\mathrm{eff}}(u, v; w)$ rejects non-dominating pairs in $O(1)$ scalar arithmetic without evaluating $\arccosh$.
 
 \paragraph{Shielded Isobathic Rings, Elevators, and Flat-Limit Equivalence.}
 Within each vertex's $M_0 = 32$ slots:
 (i)~\emph{Geodesic fiber} ($q_{\mathrm{geo}} = \max(4, \lfloor 3 M_0 / 8\rfloor)$) applies~\eqref{eq:dom_geo};
 (ii)~\emph{Radially shielded isobathic ring} (up to $\lfloor 7 M_0 / 8\rfloor$) restricts candidates to $|\rho_v - \rho_u| \le \delta_\rho$, forbids off-shell vertices ($|\rho_w - \rho_u| > \delta_\rho$) from shadowing ring members, and prunes purely on $\Sunit$ via $\alpha_{\mathrm{iso}}\ell_\angle(w, v) \le \ell_\angle(u, v)$, preserving lateral boundary highways while restoring shared-query cancellation ($d_q \approx 0$, Theorem~\ref{thm:conformal_flip}(2));
-(iii)~\emph{Inward and outward radial elevators} ($q_{\mathrm{in}}, q_{\mathrm{out}} \ge 2$) select radial transitions minimizing the step-aligned objective
+(iii)--(iv)~\emph{Inward and outward radial elevators} ($q_{\mathrm{in}}, q_{\mathrm{out}} \ge 2$) select radial transitions minimizing the step-aligned objective
 \begin{equation}
   J_{\mathrm{elev}}(u, v; \Delta^*) \triangleq \bigl||\rho_v - \rho_u| - \Delta^*\bigr| + \lambda_{\mathrm{elev}}\,\ell_\angle(u, v)
   \label{eq:elevator_obj}
 \end{equation}
-across inward ($\rho_v < \rho_u - \epsilon_\rho$) and outward ($\rho_v > \rho_u + \epsilon_\rho$) shells so trajectories can descend to apex $\rho^*$ and re-ascend to target boundary shells without falling into the origin well (Theorem~\ref{thm:vamana_pathologies}(2)).
-In the flat limit $c \to 0^+$ or when radial variance $\Var(\rho) \to 0$, $|\rho_v - \rho_u| \to 0$ across $\mathcal{X}$: the elevator sets empty, $\Delta_{\mathrm{stem}} \to 0$, and the 4-Way Compass degenerates smoothly to flat spherical {Vamana}/{\quiver}~\cite{subramanya2019diskann,xiao2026quiver}\ifpreprint\ (proved in Appendix~\ref{app:vamana_pathologies})\fi.
+across inward ($\rho_v < \rho_u - \epsilon_\rho$) and outward ($\rho_v > \rho_u + \epsilon_\rho$) shells so trajectories can descend toward the radial minimizer $\rho^*$ and re-ascend to target boundary shells (Theorem~\ref{thm:vamana_pathologies}(2)).
+In the flat limit $c \to 0^+$ or when radial variance $\Var(\rho) \to 0$, $|\rho_v - \rho_u| \to 0$ across $\mathcal{X}$: the elevator sets empty, $\Delta_{\mathrm{stem}} \to 0$, and {QuadriPrune} degenerates smoothly to flat spherical {Vamana}/{\quiver}~\cite{subramanya2019diskann,xiao2026quiver}\ifpreprint\ (proved in Appendix~\ref{app:vamana_pathologies})\fi.
 
 \subsection{Spanning-Tree Chord-Swap Island Repair}
 \label{subsec:repair}
 
 Parallel batch insertion and hub saturation can still leave $0.05\%\text{--}0.06\%$ of extreme boundary vertices with zero incoming edges ($\deg^-(u) = 0$: $518\text{--}626$ islands on {Cohere-1M}), capping asymptotic recall strictly below $100\%$.
-Lines 12--22 of Algorithm~\ref{alg:compass_build} eliminate all unreachable islands in $O(N M_0)$ time while strictly preserving maximum out-degree $\deg^+(p) \le M_0$:
-after multi-source directed {BFS} from the router entry set identifies reachable vertices $\mathcal{R}$, each unreachable vertex $u \notin \mathcal{R}$ locates a nearby anchor $p \in \mathcal{R}$ and either appends $p \to u$ (if $\deg^+(p) < M_0$) or replaces $p$'s longest outgoing chord $p \to w^\star$ satisfying $\deg^-(w^\star) \ge 2$, atomically decrementing $\deg^-(w^\star)$ so $w^\star$ retains at least one incoming path\ifpreprint\ (reachability invariant proved in Appendix~\ref{app:vamana_pathologies})\fi.
-Across all 21 million-scale {Zen~4} graphs, at most two sweeps reduce unreachable islands to \textbf{0} ($1{,}000{,}000 / 1{,}000{,}000$ reachable) in under $0.3$\,s.
+The single-pass chord-swap repair in Algorithm~\ref{alg:compass_build} eliminates unreachable islands in $O(N M_0)$ time while strictly preserving maximum out-degree $\deg^+(p) \le M_0$:
+after directed {BFS} initializes a spanning tree $(\mathcal{R}, \texttt{parent})$ from the router entry set, each unreachable vertex $u \notin \mathcal{R}$ selects a reachable anchor $p \in \mathcal{R}$ (scanning $N^+(u)$, router hubs, and the interior core prefix) and either appends $p \to u$ (if $\deg^+(p) < M_0$) or replaces a peripheral non-tree chord $p \to w^\star$ satisfying both $\texttt{parent}[w^\star] \ne p$ and $\deg^-(w^\star) \ge 2$, decrementing $\deg^-(w^\star)$ in place and expanding $(\mathcal{R}, \texttt{parent})$ incrementally from $u$\ifpreprint\ (monotonic reachability invariant proved in Appendix~\ref{app:vamana_pathologies})\fi.
+Because no spanning-tree edge is ever overwritten, $\mathcal{R}$ grows monotonically without cycle breakage; across all 21 million-scale {Zen~4} graphs, the pass reduces unreachable islands to \textbf{0} ($1{,}000{,}000 / 1{,}000{,}000$ reachable) in under $0.3$\,s.
 
 \subsection{Convex-Support Polar Router}
 \label{subsec:router}
 
 To avoid routing boundary queries through a single origin-adjacent medoid (Theorem~\ref{thm:vamana_pathologies}(2)), \rquiver{} maintains a constant-memory \texttt{PolarRouter} over $C_{\mathrm{coarse}} = 16$ and $C_{\mathrm{fine}} = 128$ spherical Tammes cones~\cite{tammes1930origin} crossed with $S = 8$ quantile-adaptive radial shells ($1{,}024$ cells total).
-Given query $q = (r_q, \rho_q, u_q)$, \rquiver{} scores coarse cones $\gamma_a = \langle u_q, \mu_a\rangle$, expands top fine sub-cones, evaluates the clamped geodesic apex $\rho_{\mathrm{sup}}^*(\rho_q, \gamma_a)$ over dataset quantiles $[\rho_{0.01}, \rho_{0.99}]$ via Proposition~\ref{prop:geodesic_apex}(2), and seeds the beam with up to $4$ entry vertices from $(\text{cone}_a, \text{shell}(\rho_{\mathrm{sup}}^*))$ and $\text{shell}(\rho_q)$.
+Given query $q = (r_q, \rho_q, u_q)$, \rquiver{} scores coarse cones $\gamma_a = \langle u_q, \mu_a\rangle$, expands top fine sub-cones, evaluates the constrained radial minimizer $\rho_{\mathrm{sup}}^*(\rho_q, \gamma_a)$ over dataset quantiles $[\rho_{0.01}, \rho_{0.99}]$ via Proposition~\ref{prop:geodesic_apex}(2), and seeds the beam with up to $4$ entry vertices from $(\text{cone}_a, \text{shell}(\rho_{\mathrm{sup}}^*))$ and $\text{shell}(\rho_q)$.
 When build-time statistics detect a near-isotropic sphere ($\max_c \bar{\alpha}_c < 0.30$), coarse filtering is bypassed so all $128$ fine cones are scanned directly in $<0.3\,\mu\text{s}$.

@@ -14,39 +14,40 @@ Because x86-64 cores provide only $64\text{--}96$ L1 {DTLB} entries and $1{,}024
 
 \begin{table}[t]
   \centering
-  \caption{Hardware-page-aligned $4096$\,B \texttt{HotSmPage} block packing $32$ vertices ($\text{page} = \text{vid} \gg 5$, $\text{lane} = \text{vid} \mathbin{\&} 31$). Resolving Row~0 translates Row~1 and Row~2 on the identical $4$\,KiB OS page.}
+  \caption{Hardware-page-aligned $4096$\,B \texttt{HotSmPage} layout with power-of-two per-vertex record stride $S_{\mathrm{rec}} = \operatorname{next\_pow2}(64 + 16\lceil D/64\rceil)$\,B (shown at $D=768$: $S_{\mathrm{rec}} = 256$\,B, $K = 16$ vertices/page). Resolving the $64$\,B \texttt{HotSmHeader} translates the entire vertex record on the identical $4$\,KiB OS page.}
   \label{tab:hot_sm_page}
   \small
   \setlength{\tabcolsep}{5pt}
   \begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}Xr@{}}
     \toprule
-    \textbf{Byte Offset} & \textbf{$4096$\,B \texttt{HotSmPage} Region ($32$ Vertices)} & \textbf{Size} \\
+    \textbf{Record Offset} & \textbf{Per-Vertex Slot in $4096$\,B \texttt{HotSmPage} ($D=768$)} & \textbf{Size} \\
     \midrule
-    \texttt{0x000..0x3FF} & Row 0: $32 \times \texttt{PolarNodeMeta}$ ($32$\,B/lane) & $1{,}024$\,B \\
-    \texttt{0x400..0x7FF} & Row 1: $32 \times \texttt{SymSketch256}$ ($32$\,B/lane) & $1{,}024$\,B \\
-    \texttt{0x800..0xFFF} & Row 2: $32 \times$ Primary {SM} Bitplanes ($64$\,B/lane) & $2{,}048$\,B \\
+    \texttt{0x00..0x1F} & \texttt{PolarNodeMeta} (radial, {SM}, \& cone scalars) & $32$\,B \\
+    \texttt{0x20..0x3F} & \texttt{SymSketch256} ($4 \times \texttt{u64}$ strided sign sketch) & $32$\,B \\
+    \texttt{0x40..0x9F} & Positive-sign {SM} bitplane (\texttt{pos}, $12 \times \texttt{u64}$) & $96$\,B \\
+    \texttt{0xA0..0xFF} & Strong-magnitude {SM} bitplane (\texttt{strong}, $12 \times \texttt{u64}$) & $96$\,B \\
     \bottomrule
   \end{tabularx}
 \end{table}
 
 Table~\ref{tab:hot_sm_page} shows our page-co-located \texttt{HotSmPage} layout:
-vertices are grouped into blocks of $32$ ($\text{page\_id} = \text{vid} \gg 5$, $\text{lane} = \text{vid} \mathbin{\&} 31$) aligned to $4096$-byte OS page boundaries.
-Row~0 packs $32 \times 32$\,B \texttt{PolarNodeMeta} headers, Row~1 packs $32 \times 32$\,B early directional sign sketches (\texttt{SymSketch256}), and Row~2 packs primary 2-bit {SM} bitplanes (with overflow words for $D > 256$ placed in a stride-coupled contiguous segment).
-Once hardware resolves the virtual-to-physical translation for Row~0 at $\text{base} + 32 \cdot \text{lane}$, subsequent reads of Row~1 ($\text{base} + 1024 + 32 \cdot \text{lane}$) and Row~2 ($\text{base} + 2048 + 64 \cdot \text{lane}$) hit the \emph{exact same L1 {DTLB} entry}, eliminating secondary page-table walks unconditionally.
+each vertex occupies a power-of-two record of $S_{\mathrm{rec}} = \operatorname{next\_pow2}(64 + 16\lceil D/64\rceil)$ bytes ($256$\,B at $D=512, 768$ packing $K = 16$ vertices/page; $512$\,B at $D=1536$ packing $K = 8$ vertices/page; $128$\,B at $D=20$ packing $K = 32$ vertices/page, supporting up to $D = 16{,}128$ within one $4$\,KiB page).
+Because $S_{\mathrm{rec}}$ divides $4096$ evenly ($\text{page\_id} = \text{vid} / K$, $\text{slot} = \text{vid} \bmod K$), every vertex's 64-byte \texttt{HotSmHeader} (\texttt{PolarNodeMeta} + \texttt{SymSketch256} in cache line~0) and its complete 2-bit {SM} bitplanes reside contiguously inside a single $4096$-byte OS page.
+Once hardware resolves the virtual-to-physical translation for \texttt{HotSmHeader} at $\text{base} + S_{\mathrm{rec}} \cdot \text{slot}$, any subsequent bitplane reads (\texttt{0x40..0xFF} at $D=768$) hit the \emph{exact same L1 {DTLB} entry}, eliminating secondary page-table walks unconditionally.
 
 \subsection{Variance-Stabilized Two-Level Beam Filtering (\texttt{SymSketch256})}
 \label{subsec:symsketch}
 
-Even within one $4$\,KiB page, fetching full 2-bit {SM} bitplanes ($192$\,B = $3$ cache lines at $D=768$; $384$\,B = $6$ cache lines at $D=1536$) for every unvisited neighbor wastes L2/L3 bandwidth once the beam tightens around $q$.
-For each unvisited neighbor $v \in N^+(u)$ against current $L$-th beam bound $\theta_{\mathrm{beam}}$, \rquiver{} executes a two-stage gate:
+Even within one $4$\,KiB page, fetching full 2-bit {SM} bitplanes ($192$\,B = $3$ cache lines at $D=768$; $384$\,B = $6$ cache lines at $D=1536$) for every unvisited neighbor incurs unnecessary memory traffic once the beam tightens around $q$.
+\rquiver{} first prefetches only the single 64-byte \texttt{HotSmHeader} cache line (consuming just one hardware Line Fill Buffer entry per neighbor) and executes a two-stage gate against the current $L$-th beam bound $\theta_{\mathrm{beam}}$:
 \begin{enumerate}
   \item \textbf{Stage-1a (Exact Radial Gate, $0$ extra cache lines):}
-  Using $(r_v, f_v)$ from Row~0, if $P_{\mathrm{rad}}(r_q, r_v) = (r_q - r_v)^2 f_q f_v \ge \theta_{\mathrm{beam}}$ (Proposition~\ref{prop:geodesic_apex}(1)), $v$ is discarded losslessly.
+  Using $(r_v, f_v)$ from \texttt{HotSmHeader} (\texttt{0x00..0x1F}), if $P_{\mathrm{rad}}(r_q, r_v) = (r_q - r_v)^2 f_q f_v \ge \theta_{\mathrm{beam}}$ (Proposition~\ref{prop:geodesic_apex}(1)), $v$ is discarded losslessly.
 
-  \item \textbf{Stage-1b (Binomial-Stabilized \texttt{SymSketch256} Gate, $0.5$ cache line):}
-  Row~1 stores a $256$-bit ($32$\,B) strided sign sketch.
+  \item \textbf{Stage-1b (Binomial-Stabilized \texttt{SymSketch256} Gate, same $64$\,B header line):}
+  The upper half of \texttt{HotSmHeader} (\texttt{0x20..0x3F}) stores a $256$-bit ($32$\,B) strided sign sketch.
   Computing the 256-bit Hamming distance $H \in \{0, \dots, 256\}$ against $q$'s sketch via four \texttt{u64} \texttt{XOR}+\texttt{POPCNT} instructions indexes two compile-time lookup tables ($2$\,KB total in L1): the exact arcsine table $\hat{\gamma}_{256} = \texttt{COS\_PI\_256}[H] = \cos(\pi H / 256)$ and the binomial standard-deviation ratio table $\rho_{\mathrm{std}}(H) = \texttt{SKETCH256\_STD\_RATIO}[H] = \max(1, \sigma_{\mathrm{sk}}(H/256) / \sigma_{\mathrm{sk}}(48/256))$ derived in Proposition~\ref{prop:asym_cj_gate}(3).
-  Forming the variance-stabilized optimistic cosine bound $\hat{\gamma}_{\mathrm{upper}} = \min(1, \hat{\gamma}_{256} + \Delta_0 \cdot \rho_{\mathrm{std}}(H))$ yields optimistic proxy $\widehat{P}_{\mathbb{B}}^{\mathrm{opt}}(q, v) = R(r_q, r_v) + W(r_q, r_v)(1 - \hat{\gamma}_{\mathrm{upper}})$; whenever $\widehat{P}_{\mathbb{B}}^{\mathrm{opt}}(q, v) > \theta_{\mathrm{beam}}$ (for non-residual vertices once the beam fills), $v$ is pruned without touching its full 2-bit {SM} bitplanes.
+  Forming the variance-stabilized optimistic cosine bound $\hat{\gamma}_{\mathrm{upper}} = \min(1, \hat{\gamma}_{256} + \Delta_0 \cdot \rho_{\mathrm{std}}(H))$ yields optimistic proxy $\widehat{P}_{\mathbb{B}}^{\mathrm{opt}}(q, v) = R(r_q, r_v) + W(r_q, r_v)(1 - \hat{\gamma}_{\mathrm{upper}})$; whenever $\widehat{P}_{\mathbb{B}}^{\mathrm{opt}}(q, v) > \theta_{\mathrm{beam}}$ (for non-residual vertices once the beam fills), $v$ is pruned without ever prefetching or reading its trailing bitplane cache lines.
 \end{enumerate}
 Scaling the sketch margin by $\rho_{\mathrm{std}}(H)$ keeps tight filtering ($1.0\times$) for high-similarity neighbors ($H \le 48$) while automatically widening up to $2.26\times$ near $H \approx 115$ to prevent premature pruning on moderate-angle manifolds.
 In our controlled three-seed ablation on {Cohere-1M}, Stage-1a and \texttt{SymSketch256} skip $57.6\%$ of full bitplane loads, raising single-thread $99\%$-recall QPS from $1{,}752$ ({SoA}) to $1{,}909$ (\texttt{HotSmPage}) and $2{,}071$ (\texttt{HotSmPage} + \texttt{SymSketch256}, $+18.2\%$ total).
@@ -54,33 +55,33 @@ In our controlled three-seed ablation on {Cohere-1M}, Stage-1a and \texttt{SymSk
 \subsection{3-to-2 Carry-Save AVX2 Bitplane Kernel}
 \label{subsec:csa_kernel}
 
-Candidates surviving Stage-1b evaluate the five-popcount 2-bit {SM} bilinear form of Lemma~\ref{lem:sm_pythagorean}.
+During hop traversal, candidates surviving Stage-1b are scored via the fast canonical $\{\pm 1, \pm 3\}$ 5-popcount 2-bit {SM} bilinear form scaled by $(D + 8 s_v)^{-1/2}$ from \texttt{PolarNodeMeta}, deferring exact two-level $(a_v, \delta_v, \sigma_v)$ orthogonal projection to the converged $L$-candidate pool in \S\ref{subsec:stage05_rerank}.
 Under canonical $\{\pm 1, \pm 3\}$ levels with sign disagreement $x = s_q \oplus s_v$, coordinate products combine base disagreements $b_0 = x$, single-strong disagreements $b_1 = x \wedge (m_q \oplus m_v)$ (weight $2$), and double-strong disagreements $b_2 = x \wedge m_q \wedge m_v$ (weight $8$) alongside $n_{11} = m_q \wedge m_v$.
-Invoking {AVX2} \texttt{vpshufb} nibble-lookup popcounts~\cite{mula2018faster} independently on every bitplane would execute $15$ \texttt{vpshufb} instructions per $768$D candidate, saturating CPU port-5 shuffle units.
+Invoking {AVX2} \texttt{vpshufb} nibble-lookup popcounts~\cite{mula2018faster} independently on every bitplane would execute $15$ \texttt{vpshufb} shuffle instructions per $768$D candidate.
 Instead, \rquiver{} compresses triplets of bitplanes $(A, B, C)$ across 256-bit \texttt{YMM} registers via a bitwise \emph{3-to-2 Carry-Save Adder} ({CSA}):
 \begin{equation}
   \mathrm{Sum} = A \oplus B \oplus C, \qquad
   \mathrm{Carry} = (A \wedge B) \vee \bigl((A \oplus B) \wedge C\bigr),
   \label{eq:csa_identity}
 \end{equation}
-which satisfies $\popcnt(A) + \popcnt(B) + \popcnt(C) = \popcnt(\mathrm{Sum}) + 2\,\popcnt(\mathrm{Carry})$ identically\ifpreprint\ (verified bit-by-bit in Appendix~\ref{app:sm_algebra})\fi, cutting port-5 \texttt{vpshufb} instructions by $33\%$ ($15 \to 10$ per $768$D candidate) and evaluating each surviving candidate in $<35$\,ns alongside distance-2 software prefetching.
+which satisfies $\popcnt(A) + \popcnt(B) + \popcnt(C) = \popcnt(\mathrm{Sum}) + 2\,\popcnt(\mathrm{Carry})$ identically\ifpreprint\ (verified bit-by-bit in Appendix~\ref{app:sm_algebra})\fi, cutting \texttt{vpshufb} shuffle instructions by $33\%$ ($15 \to 10$ per $768$D candidate) and evaluating each surviving candidate in $<35$\,ns alongside distance-2 software prefetching.
 
-\subsection{L1-Bounded \textsc{Stage-0.5} Nibble-LUT, \textsc{CJ-Gate}, and FP64 Reranking}
+\subsection{L1-Bounded \textsc{Stage-0.5} Asymmetric Projection, \textsc{CJ-Gate}, and FP64 Reranking}
 \label{subsec:stage05_rerank}
 
 Once beam search converges to a pool $\mathcal{P}$ of size $L$, fetching all $L$ cold FP32 vectors ($L \times 3$\,KB) would dominate latency at large $L$.
 \rquiver{} executes a three-step tail pipeline:
 \begin{enumerate}
   \item \textbf{L1-Bounded \textsc{Stage-0.5} Asymmetric Re-Scoring:}
-  By Theorem~\ref{thm:conformal_flip}(2) and Proposition~\ref{prop:asym_cj_gate}(1), evaluating $\hat{\gamma}_{\mathrm{asym}}(u_q, u_v) = \operatorname{clip}_{[-1,1]}(\langle u_q, \hat{u}_v\rangle / \sigma_v^2)$ with unquantized $u_q$ eliminates both cross-shell query-noise non-cancellation ($e_q = 0$) and norm-inflation bias.
-  Let $S_{\mathrm{tot}} = \sum_{i=1}^D |u_{q,i}|$ and define three masked unsigned-query subset sums for candidate bitplanes $(s_v, m_v)$ against query sign mask $s_q$: sign-agreement sum $S_+ = \sum_{i : s_{q,i} = s_{v,i}} |u_{q,i}|$, strong-candidate sum $S_h = \sum_{i : m_{v,i} = 1} |u_{q,i}|$, and joint agreement-strong sum $S_{+h} = \sum_{i : s_{q,i} = s_{v,i} \land m_{v,i} = 1} |u_{q,i}|$.
+  By Theorem~\ref{thm:conformal_flip}(2) and Proposition~\ref{prop:asym_cj_gate}(1), evaluating $\hat{\gamma}_{\mathrm{asym}}(u_q, u_v) = \operatorname{clip}_{[-1,1]}(\langle u_q, \hat{u}_v\rangle / \sigma_v^2)$ with unquantized $u_q$ and $(a_v, \delta_v, \sigma_v)$ already resident in \texttt{PolarNodeMeta} eliminates both cross-shell query-noise non-cancellation ($e_q = 0$) and norm-inflation bias.
+  Let $S_{\mathrm{tot}} = \sum_{i=1}^D u_{q,i}$ and define three masked signed-query subset sums over candidate bitplanes $(s_v, m_v)$: positive-sign sum $S_+ = \sum_{i : s_{v,i} = 1} u_{q,i}$, strong-candidate sum $S_h = \sum_{i : m_{v,i} = 1} u_{q,i}$, and joint positive-strong sum $S_{+h} = \sum_{i : s_{v,i} = 1 \land m_{v,i} = 1} u_{q,i}$ (equivalently expressed via unsigned $|u_{q,i}|$ and sign-agreement masks $\mathbb{I}[s_{q,i}=s_{v,i}]$).
   Then $\langle u_q, \hat{u}_v\rangle$ reduces algebraically to
   \begin{equation}
     \langle u_q, \hat{u}_v\rangle = a_v\bigl(2 S_+ - S_{\mathrm{tot}}\bigr) + \delta_v\bigl(2 S_{+h} - S_h\bigr).
     \label{eq:asym_subset_sums}
   \end{equation}
-  \rquiver{} lazily builds a $6$\,KiB 4-bit-nibble byte-lookup table (\texttt{AsymQuerySm}, fitting inside $32$\,KiB L1D in $<4\,\mu\text{s}$) that accumulates $(S_+, S_h, S_{+h})$ via {AVX2} \texttt{vpshufb}+\texttt{vpsadbw} shuffle kernels~\cite{andre2015cache,andre2017accelerated,trent2024bbq} exclusively over the $L$ pool members.
-  For pool members with $\text{cone\_id} > 0$, \textsc{Stage-0.5} lazily caches $(\alpha_{q,c}, \beta_{q,c}, \text{LUT}(\tilde{r}_{q,c}))$ for the $1\text{--}3$ touched cones and evaluates the tangent-cone estimator~\eqref{eq:cone_estimator}.
+  Unlike 4-bit nibble {SIMD} lookup tables~\cite{andre2015cache,andre2017accelerated,trent2024bbq}, \texttt{AsymQuerySm} encodes $u_q$ once per query into a $1.5$\,KiB L1-resident \texttt{i16} fixed-point array ($q_{\mathrm{i16},i} = \operatorname{round}(8100\,u_{q,i})$ at $D=768$; Cauchy--Schwarz guarantees 16-lane sums remain $\le 32{,}400 < 2^{15}-1$ without overflow) and accumulates $(S_+, S_h, S_{+h})$ via register-resident {AVX2} 16-lane bit-mask selection and \texttt{vpmaddwd} (or an optional $2$\,KiB byte-mask {LUT}) exclusively over the $L$ pool members.
+  For pool members with an active residual cone ($\text{cone\_id} \neq \texttt{0x0FFF}$), \textsc{Stage-0.5} lazily caches $(\alpha_{q,c}, \beta_{q,c}, \texttt{AsymQuerySm}(\tilde{r}_{q,c}))$ for the $1\text{--}3$ touched cones and evaluates the tangent-cone estimator~\eqref{eq:cone_estimator}.
 
   \item \textbf{\textsc{CJ-Gate} Observable-Margin Plateau Expansion:}
   Sorting $\mathcal{P}$ by asymmetric proxy $\widehat{P}_{(1)} \le \dots \le \widehat{P}_{(L)}$, baseline reranking retains the top $B$ candidates.

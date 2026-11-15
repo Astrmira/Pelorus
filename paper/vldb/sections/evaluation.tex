@@ -4,17 +4,18 @@
 
 Our evaluation examines how warped-product graph indexing in \rquiver{} performs across real and synthetic curved manifolds.
 We first measure construction speed, hot navigation memory, and matched-recall throughput relative to full-precision and 8-bit polar graphs (\S\ref{subsec:eval_repr}), compare against exact hyperbolic graph indices and flat-proxy vector databases (\S\ref{subsec:eval_external}), and test multi-threaded scaling from $1$ to $24$ hardware threads (\S\ref{subsec:eval_scaling}).
-We then isolate each topological and execution mechanism via controlled ablations (\S\ref{subsec:eval_ablation}) and analyze synthetic boundary stress tests through a four-stage recall-loss audit that separates 2-bit quantization limits from intrinsic spherical dimensionality (\S\ref{subsec:eval_synthetic}).
+We then isolate each topological and execution mechanism via controlled ablations (\S\ref{subsec:eval_ablation}) and evaluate external baselines on four synthetic distributions, using a four-stage recall-loss audit to characterize the measured traversal, beam-retention, and rerank-admission losses (\S\ref{subsec:eval_synthetic}).
 
 \subsection{Experimental Setup}
 \label{subsec:eval_setup}
 
 \paragraph{Hardware and Protocol.}
-All experiments execute on an isolated {AMD EPYC 9654} ({Zen~4}) server restricted via Linux cgroups to 32 hardware threads (\texttt{cpuset 64-95}) and $64$\,GiB RAM, with swap disabled and transparent huge pages ({THP}) set to \texttt{never} so $4$\,KiB {DTLB} translation reflects standard production deployments.
+Experiments execute in two isolated Linux containers on {AMD EPYC 9654} ({Zen~4}) hosts, each restricted via cgroups to 32 logical CPUs and $60$\,GiB RAM. The CPU sets are \texttt{64-95} and \texttt{128-159}. Swap is disabled and transparent huge pages ({THP}) are set to \texttt{never}, using standard $4$\,KiB pages for {DTLB} translation. Each instance runs one timed benchmark at a time, and measurement manifests record instance placement and source/binary fingerprints.
 All Rust binaries are compiled in release mode targeting native {AVX-512F} and {AVX2+FMA}.
 Unless otherwise stated, graph indices use base degree $M = 16$ (maximum out-degree $M_0 = 32$), construction beam $L_c = 128$, geodesic slack $\alpha = 1.2$, and $32$ build threads.
-Following community {ANN} evaluation protocols~\cite{aumuller2020annbenchmarks,simhadri2022results}, controlled polar representation, component, and {Cohere-1M} external-baseline comparisons are built across \textbf{three independent random seeds} (\texttt{12345}, \texttt{12446}, \texttt{12547}) and report three-graph means.
-The unified full \rquiver{} configuration (with adaptive \textsc{CJ-Gate}, purity-gated \texttt{ResidualConeDict}, variance-stabilized \texttt{SymSketch256}, and $4096$\,B \texttt{HotSmPage} co-location enabled end-to-end) and its synthetic/component rescue ablations execute under the exact same {Zen~4} cgroup configuration (\texttt{seed 12345}) against exact IEEE-754 FP64 geodesic ground truth across $1, 2, 4, 8, 16, 24$ query threads.
+Following community {ANN} evaluation protocols~\cite{aumuller2020annbenchmarks,simhadri2022results}, controlled {Cohere-1M} representation comparisons and {\rquiver{}-Core} component ablations (alongside multi-seed {\rquiver{}-Core} stability checks on {MERU-1M} and {OpenAI-1536}) are built across \textbf{three independent random seeds} (\texttt{12345}, \texttt{12446}, \texttt{12547}) and report three-graph means.
+Across all $210$ three-graph operating points, Recall@10 differs by at most $0.22$ percentage points across seeds, and $99\%$-recall {\rquiver{}-Core} QPS varies within $\pm 2.64\%$ on {Cohere-1M} ($\pm 0.20\%$ on {MERU-1M}).
+Relying on this cross-seed stability to keep full multi-system parameter sweeps tractable, end-to-end \rquiver{}, {Global-SM}, synthetic stress tests, and external baselines use one measured graph per construction configuration, with seed \texttt{12345} for configurable build randomness. HDB retains its upstream graph-builder randomization. All use the same {Zen~4} resource quotas and IEEE-754 FP64 geodesic ground truth across $1, 2, 4, 8, 16, 24$ query threads.
 
 \begin{table}[t]
   \centering
@@ -26,9 +27,9 @@ The unified full \rquiver{} configuration (with adaptive \textsc{CJ-Gate}, purit
     \toprule
     \textbf{Dataset} & $N$ & $D$ & $|Q|$ & \textbf{Manifold Geometry} \\
     \midrule
-    Cohere-1M & 1,000K & 768 & 1,000 & Hollow {Poincar\'e} text ($\rho_{0.01}=1.44$) \\
-    MERU-1M~\cite{desai2023meru} & 1,000K & 512 & 2,000 & Native {Lorentz}$\to\Bunit$ multimodal \\
-    OpenAI-1536 & 990K & 1,536 & 2,000 & Centered DBpedia ($\text{med}\,\rho=2.0$) \\
+    Cohere-1M & 1,000K & 768 & 1,000 & Mapped Wikipedia ($\exp_0^1$, $\rho_{0.01}=1.44$) \\
+    MERU-1M~\cite{desai2023meru} & 1,000K & 512 & 10,000 & Native {Lorentz}$\to\Bunit$ multimodal \\
+    OpenAI-1536 & 990K & 1,536 & 8,000 & Mapped DBpedia ($\exp_0^1$, $\text{med}\,\rho=2.0$) \\
     WordNet-Hazy & 83.9K & 20 & 2,000 & Native {Lorentz}$\to\mathbb{B}_1^{20}$ taxonomy \\
     \midrule
     Uniform-Narrow & 1,000K & 512 & 2,000 & Isotropic $\mathbb{S}^{511}$, $\rho \in [3.9, 4.1]$ \\
@@ -41,22 +42,31 @@ The unified full \rquiver{} configuration (with adaptive \textsc{CJ-Gate}, purit
 
 \paragraph{Benchmarks.}
 Table~\ref{tab:datasets} summarizes the eight hyperbolic benchmarks in $\Bunit$ ($c=1$).
-Among real workloads, \textbf{Cohere-1M} maps 1M 768D Wikipedia embeddings into $\Bunit$, forming a hollow boundary-concentrated shell ($\rho_{0.01} = 1.44$).
-\textbf{MERU-1M} contains 1M 512D native {Lorentz} hyperboloid vision-language embeddings~\cite{desai2023meru} mapped losslessly via~\eqref{eq:lorentz_isometry} and evaluated on $2{,}000$ disjoint held-out test queries (drawn from a $10{,}000$-query evaluation pool alongside $2{,}000$ tuning queries), while \textbf{OpenAI-1536} maps 990K 1536D \texttt{text-embedding-3-large} DBpedia embeddings (mean-centered, median $\rho = 2.0$) with $2{,}000$ held-out test queries from an $8{,}000$-query split.
-\textbf{WordNet-Hazy} adapts the public $20$D native {Lorentz} {WordNet} weights (\texttt{wordnet\_full.emb}, $83{,}943$ base nodes and $2{,}000$ disjoint test queries) losslessly into $\mathbb{B}_1^{20}$ with $\le 2.53\times 10^{-15}$ max isometry error.
+For Euclidean embeddings mapped into $\Bunit$, both \textbf{Cohere-1M} and \textbf{OpenAI-1536} use the origin exponential map from centered coordinates: given database mean $\bar{x}$ and global radial scale $s = 2 / \operatorname{median}_i(\|x_i - \bar{x}\|_2)$, each vector is mapped as
+\[
+\Phi(x) = \tanh\!\left(\frac{s}{2}\|x - \bar{x}\|_2\right)\frac{x - \bar{x}}{\|x - \bar{x}\|_2},
+\]
+clamped at Euclidean radius $1 - 10^{-6}$ so that the database median geodesic depth is fixed at $\rho_{0.50} = 2.0$.
+On \textbf{Cohere-1M} (1M 768D Wikipedia embeddings, $1{,}000$ test queries, $s = 0.2644$, zero clipped vectors), norm concentration after mean-centering narrows base depths to $[0.98, 3.39]$ ($\rho_{0.01} = 1.45$, $\rho_{0.99} = 2.69$) and query depths to $[1.25, 2.98]$ ($\rho_{0.01} = 1.44$, $\rho_{0.99} = 2.67$), forming a hollow boundary-concentrated shell with no vectors below $\rho = 0.98$.
+\textbf{OpenAI-1536} applies unit $\ell_2$-normalization before mean-centering and $\Phi(x)$ ($s = 2.093$) across 990K 1536D \texttt{text-embedding-3-large} {DBpedia} embeddings with $8{,}000$ held-out test queries and $2{,}000$ tuning queries.
+In contrast, \textbf{MERU-1M} contains 1M 512D native {Lorentz} hyperboloid {MERU--ImageNet} vision-language embeddings~\cite{desai2023meru} mapped losslessly via~\eqref{eq:lorentz_isometry} and evaluated on $10{,}000$ held-out test queries alongside $2{,}000$ tuning queries, and \textbf{WordNet-Hazy} adapts the public $20$D native {Lorentz} {WordNet} weights (\texttt{wordnet\_full.emb}, $83{,}943$ base nodes and $2{,}000$ disjoint test queries) losslessly into $\mathbb{B}_1^{20}$ with $\le 2.53\times 10^{-15}$ max isometry error.
 Four 1M-vector 512D synthetic benchmarks cross directional geometry (isotropic $\mathbb{S}^{511}$ versus $256$ tight spherical cones) with radial depth support (narrow boundary shell $\rho \in [3.9, 4.1]$ versus wide hierarchy $\rho \in [0.4, 6.0]$).
 
 \paragraph{Baselines.}
-Within our polar engine, \textbf{Polar-FP32} and \textbf{Polar-SQ8} share \rquiver{}'s Compass topology and router while executing construction and search over exact FP32 or 8-bit scalar-quantized unit directions.
-\textbf{SameGraph-FP32} and \textbf{SameGraph-SQ8} freeze the 2-bit-constructed graph and replace only the search-time directional representation to decouple graph quality from traversal speed, while \textbf{\rquiver{}-A7} (pre-repair polar 2-bit) and \textbf{\rquiver{}-A8} (unrescued pre-cone polar 2-bit) represent controlled three-seed variants.
-Under the same hardware and FP64 ground-truth protocol, we also include four external systems: \textbf{Exact-RobustPrune}~\cite{subramanya2019diskann,prokhorenkova2022hyperbolic} using exact geodesic {Vamana} pruning without polar decoupling, \textbf{HyperspaceDB}~\cite{glukhota2026hyperspacedb} in FP32 ($M=32, L_c=256$, dynamic and flat layouts) and FP64 hyperbolic modes, and flat inner-product {HNSW} indices in \textbf{Faiss-HNSW}~\cite{douze2024faiss} and \textbf{Milvus-HNSW}~\cite{wang2021milvus} followed by exact FP64 hyperbolic reranking.
+Within our engine family, we evaluate two orthogonal groups of controlled variants:
+(1)~\emph{Representation and frozen-graph controls:} \textbf{Polar-FP32} and \textbf{Polar-SQ8} share \rquiver{}'s {QuadriPrune} topology and router while substituting exact FP32 or 8-bit scalar-quantized unit directions during both construction and search, whereas \textbf{SameGraph-FP32} and \textbf{SameGraph-SQ8} freeze the 2-bit-constructed graph and replace only the search-time directional representation to decouple graph quality from traversal speed (plotted as \textbf{FP32 (same graph)} and \textbf{SQ8 (same graph)} alongside 2-bit {SM} in Figure~\ref{fig:abl_repr}).
+(2)~\emph{Cumulative 2-bit engine progression:} \textbf{\rquiver{}-Split} (split-array 2-bit {QuadriPrune} without chord-swap island repair, \texttt{HotSmPage} co-location, or \texttt{SymSketch256}) $\to$ \textbf{\rquiver{}-Core} (adding chord-swap repair, $4096$\,B single-page co-location, and \texttt{SymSketch256} under global 2-bit {SM}) $\to$ full \textbf{\rquiver{}} (further enabling purity-gated \texttt{ResidualConeDict} and adaptive \textsc{CJ-Gate} plateau expansion; in \S\ref{subsec:eval_synthetic}, \textbf{Global-SM} denotes the unrescued global-code baseline without \texttt{ResidualConeDict}, \textsc{CJ-Gate}, or variance-stabilized sketch margins).
+Under the same hardware and FP64 ground-truth protocol, we compare against four external systems using the exact variant names reported in Figures~\ref{fig:real_pareto}--\ref{fig:scaling} and Tables~\ref{tab:external_baselines} and~\ref{tab:synthetic_external}:
+\textbf{Exact-RobustPrune}~\cite{subramanya2019diskann,prokhorenkova2022hyperbolic} using exact geodesic {Vamana} pruning without polar decoupling;
+\textbf{HyperspaceDB} (\textbf{HDB})~\cite{glukhota2026hyperspacedb} across FP32 and FP64 hyperbolic modes and dynamic/flat storage layouts (\textbf{HDB FP32 dynamic}, \textbf{HDB FP32 flat}, \textbf{HDB FP64 dynamic}, \textbf{HDB FP64 flat}, covering $(M=16, L_c=128)$ and $(M=32, L_c=256)$);
+and flat inner-product {HNSW} indices in \textbf{Faiss}~\cite{douze2024faiss}---tested with mean-centered {Lorentz} inner product (\textbf{Faiss centered IP}), unit-direction search with exact FP64 reranking (\textbf{Faiss direction}), and uncentered {Lorentz} inner product (\textbf{Faiss raw Lorentz-IP})---and \textbf{Milvus}~\cite{wang2021milvus} (\textbf{Milvus centered IP}), all paired with exact FP64 geodesic reranking.
 
 \subsection{Index Construction and Polar Representation Comparison}
 \label{subsec:eval_repr}
 
 \begin{table*}[t]
   \centering
-  \caption{Construction time, hot navigation memory, zero-in-degree islands, and matched-recall search performance across real hyperbolic datasets on AMD EPYC 9654 (Zen~4, 32 build threads). {Cohere-1M} variants through {\rquiver{}-A8} report three-graph means; unified \rquiver{} reports end-to-end Zen~4 evaluation (\texttt{seed 12345}).}
+  \caption{Controlled polar representation comparisons on {Cohere-1M} and measured \rquiver{} coverage across four real workloads (Zen~4, 32 build threads). {Cohere-1M} representation and progression controls report three-graph means; end-to-end full \rquiver{} rows follow the single-build protocol of \S\ref{subsec:eval_setup}. Internal representation controls were measured on {Cohere-1M} only.}
   \label{tab:zen4_repr}
   \small
   \setlength{\tabcolsep}{3pt}
@@ -71,8 +81,8 @@ Under the same hardware and FP64 ground-truth protocol, we also include four ext
     & Polar-SQ8 & 66.9 & 1,261.0 & 0 & 1,887 & 0.68 & 34,639 & 878 & 1.44 & 16,844 & 372 & 3.39 & 7,016 \\
     & SameGraph-FP32 & 32.5 & 3,565.0$^\ddagger$ & 0 & 1,031 & 1.27 & \missing & 454 & 2.60 & \missing & 113 & 10.54 & \missing \\
     & SameGraph-SQ8 & 32.5 & 1,261.0 & 0 & 1,979 & 0.62 & \missing & 894 & 1.52 & \missing & 222 & 5.57 & \missing \\
-    & \rquiver{}-A7 & \textbf{32.3} & \textbf{485.0} & 626 & 2,760 & 0.45 & 56,365 & 1,749 & 0.67 & 38,203 & 618 & 1.88 & 14,439 \\
-    & \rquiver{}-A8 & 32.5 & \textbf{485.0} & \textbf{0} & \textbf{3,841} & \textbf{0.31} & \textbf{79,047} & \textbf{2,071} & \textbf{0.56} & \textbf{45,833} & 688 & \textbf{1.63} & 16,059 \\
+    & \rquiver{}-Split & \textbf{32.3} & \textbf{485.0} & 626 & 2,760 & 0.45 & 56,365 & 1,749 & 0.67 & 38,203 & 618 & 1.88 & 14,439 \\
+    & \rquiver{}-Core & 32.5 & \textbf{485.0} & \textbf{0} & \textbf{3,841} & \textbf{0.31} & \textbf{79,047} & \textbf{2,071} & \textbf{0.56} & \textbf{45,833} & 688 & \textbf{1.63} & 16,059 \\
     & \textbf{\rquiver{}} & 35.0 & \textbf{485.0}$^*$ & \textbf{0} & 2,907 & 0.41 & 58,162 & 1,930 & 0.62 & 42,466 & \textbf{738} & 1.65 & \textbf{17,137} \\
     \midrule
     MERU-1M & \textbf{\rquiver{}} & \textbf{25.7} & \textbf{420.8}$^*$ & \textbf{0} & \textbf{2,547}$^\S$ & \textbf{0.50} & \textbf{53,483}$^\S$ & \textbf{2,547} & \textbf{0.50} & \textbf{53,483} & \textbf{1,669} & \textbf{0.81} & \textbf{36,092} \\
@@ -84,88 +94,73 @@ Under the same hardware and FP64 ground-truth protocol, we also include four ext
   {\footnotesize \textit{Note:} Latency p99 is in milliseconds (1T). $^*$Logical split payload; $4096$\,B \texttt{HotSmPage} co-location adds $32$\,B/vertex sketch and page alignment ($517.0$, $516.8$, $765.6$, and $32.8$\,MB, respectively). $^\ddagger$Includes $3{,}072$\,MB FP32 vectors accessed randomly during beam traversal ($493.0$\,MB polar headers + CSR). $^\S$Attains $99.25\%$ Recall@10 at the same operating point ($4{,}521$\,QPS 1T and $94{,}846$\,QPS 24T at $\ge 95\%$ Recall@10).}
 \end{table*}
 
+Table~\ref{tab:zen4_repr} evaluates controlled polar directional representations on {Cohere-1M} and summarizes end-to-end \rquiver{} performance across all four real hyperbolic workloads.
+
+\paragraph{Construction Speed and Memory Footprint.}
+On {Cohere-1M}, \rquiver{} builds a $100\%$-reachable 1M-vertex hyperbolic index in \textbf{$35.0$\,s} on 32 threads---$5.44\times$ faster than {Polar-FP32} ($190.2$\,s) and $1.91\times$ faster than {Polar-SQ8} ($66.9$\,s)---while compressing logical hot navigation state to $485.0$\,MB ($2.60\times$ smaller than {Polar-SQ8} and $7.35\times$ smaller than full-vector traversal; $517.0$\,MB or $2.44\times$ smaller under $4096$\,B \texttt{HotSmPage} co-location).
+On native hyperbolic {MERU-1M} ($512$D), {OpenAI-1536} ($1536$D), and {WordNet-Hazy} ($20$D), 32-thread construction completes in $25.7$\,s, $43.6$\,s, and $1.5$\,s, respectively, with zero unreachable islands across every built graph.
+
+\paragraph{Matched-Recall Throughput and Graph-Quality Crossover.}
+At $\ge 99\%$ Recall@10 on {Cohere-1M}, \rquiver{} reaches \textbf{$1{,}930$\,QPS} ($0.62$\,ms p99) on 1 thread and \textbf{$42{,}466$\,QPS} ($1.20$\,ms p99) on 24 threads, improving over {Polar-FP32} by \textbf{$4.30\times$ (1T)} and \textbf{$6.31\times$ (24T)}, and over {Polar-SQ8} by \textbf{$2.20\times$ (1T)} and \textbf{$2.52\times$ (24T)}.
+Comparing {\rquiver{}-Core} and full \rquiver{} highlights the exact precision--throughput trade-off of adaptive plateau gating: on diffuse {Cohere-1M} ($0$ active residual cones), {\rquiver{}-Core} attains slightly higher throughput at moderate $98\%\text{--}99\%$ targets ($3{,}841$ / $2{,}071$\,QPS 1T vs.\ $2{,}907$ / $1{,}930$\,QPS) because \textsc{CJ-Gate} conservatively promotes near-tie boundary plateau candidates into FP64 reranking, whereas at $\ge 99.5\%$ Recall@10 that adaptive expansion pushes full \rquiver{} ahead to \textbf{$738$\,QPS} (1T) and \textbf{$17{,}137$\,QPS} (24T)---outperforming {\rquiver{}-Core} ($688$ / $16{,}059$\,QPS) as well as {Polar-FP32} by \textbf{$2.86\times$ (1T)} and \textbf{$4.35\times$ (24T)} while safeguarding concentrated boundary clusters (\S\ref{subsec:eval_synthetic}).
+The frozen-graph crossover variants isolate why 2-bit construction works:
+running exact FP32 navigation over the 2-bit-constructed graph ({SameGraph-FP32}) achieves $454$\,QPS at $99\%$ recall versus $448$\,QPS on the FP32-constructed graph, confirming that polar 2-bit {SM} comparisons preserve {Vamana} topology quality at $>5\times$ lower build cost.
+Meanwhile, replacing search-time FP32 reads with the 2-bit page-co-located engine accelerates traversal on that identical graph by $4.25\times$ under \rquiver{} ($4.56\times$ under {\rquiver{}-Core}) at $99\%$ recall and $6.53\times$ at $99.5\%$ recall ($738$ vs.\ $113$\,QPS).
+On native hyperbolic {MERU-1M}, \rquiver{} achieves $2{,}547$\,QPS (1T) and $53{,}483$\,QPS (24T) at $99.25\%$ Recall@10 ($1{,}669$ and $36{,}092$\,QPS at $99.76\%$ Recall@10); on 1536D {OpenAI-1536} (Figure~\ref{fig:pareto_openai}), it sustains $792$\,QPS (1T) and $14{,}731$\,QPS (24T) at $99.24\%$ Recall@10; and on 20D {WordNet-Hazy}, it reaches $3{,}089$\,QPS (1T) and $65{,}405$\,QPS (24T) at $99.36\%$ Recall@10 ($2{,}341$ and $52{,}371$\,QPS at $99.79\%$).
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.8\linewidth]{pareto_openai_1536_1t.pdf}
+  \caption{Measured \rquiver{} Recall@10--QPS frontier on {OpenAI-1536} ($990$K vectors, $1536$D, Zen~4, one query thread).}
+  \label{fig:pareto_openai}
+\end{figure}
+
+\subsection{Comparison with Hyperbolic and Flat-Proxy Engines}
+\label{subsec:eval_external}
+
+\begin{table*}[t]
+  \centering
+  \caption{Measured comparison of \rquiver{} and baselines on {Cohere-1M} and {MERU-1M} (Zen~4, 32 build threads) at Recall@10 targets of $90\%$, $95\%$, $98\%$, $99\%$, and $99.5\%$. Panels (a) and (b) report 1-thread and 24-thread QPS, respectively.}
+  \label{tab:external_baselines}
+  \footnotesize
+  \setlength{\tabcolsep}{2pt}
+  \input{tables/baseline_comparison}
+  \par\vspace{2pt}
+  {\footnotesize \textit{Note:} HDB denotes HyperspaceDB. A dash denotes the absence of a qualifying measured point at that thread count. {Polar-SQ8} and {Polar-FP32} report three-graph means; \rquiver{} and external systems use the single-build protocol of \S\ref{subsec:eval_setup}. Build time and $M/L_c$ correspond to the fastest qualifying 1T configuration at $99\%$ recall, or the peak-recall configuration when $99\%$ is unreached. Each QPS column independently selects its fastest measured qualifying configuration. The $90\%$ and $95\%$ columns are selected from the existing measured configurations. Peak recall is the largest measured 1T recall; p99 is in milliseconds at the selected $99\%$ 1T point.}
+\end{table*}
+
 \begin{figure*}[t]
   \centering
-  \begin{subfigure}[t]{0.325\textwidth}
+  \begin{subfigure}[t]{0.485\textwidth}
     \centering
     \includegraphics[width=\linewidth]{pareto_cohere_1m_1t.pdf}
     \caption{Cohere-1M ($768$D, 1 thread)}
     \label{fig:pareto_cohere}
   \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.325\textwidth}
+  \begin{subfigure}[t]{0.485\textwidth}
     \centering
     \includegraphics[width=\linewidth]{pareto_meru_1m_1t.pdf}
-    \caption{MERU--ImageNet-1M ($512$D, 1 thread)}
+    \caption{MERU-1M ($512$D, 1 thread)}
     \label{fig:pareto_meru}
-  \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.325\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]{pareto_openai_1536_1t.pdf}
-    \caption{OpenAI--DBpedia-1M ($1536$D, 1 thread)}
-    \label{fig:pareto_openai}
   \end{subfigure}
-  \caption{Single-thread Recall@10--QPS Pareto frontiers across three million-scale real hyperbolic benchmarks on Zen~4 (three-graph means of the unrescued {\rquiver{}-A8} baseline against polar and exact variants).}
+  \caption{Matched-dataset Recall@10--QPS frontiers of \rquiver{} and all measured external baselines on Zen~4. Each panel shows the full measured recall range and a high-recall detail view. HDB denotes HyperspaceDB. {Polar-FP32} and {Polar-SQ8} report three-graph means with min--max error bars, while \rquiver{} and external baselines follow the single-build protocol of \S\ref{subsec:eval_setup}. Each method's frontier includes its measured build and search configurations; lines connect nondominated measurements.}
   \label{fig:real_pareto}
 \end{figure*}
 
-Table~\ref{tab:zen4_repr} and Figure~\ref{fig:real_pareto} compare index build cost, hot navigation memory, and matched-recall throughput across the real benchmarks.
+Table~\ref{tab:external_baselines} and Figure~\ref{fig:real_pareto} place \rquiver{} alongside {Exact-RobustPrune}~\cite{prokhorenkova2022hyperbolic}, {HDB} ({HyperspaceDB}~\cite{glukhota2026hyperspacedb}), and flat inner-product {HNSW} proxies in {Faiss}~\cite{douze2024faiss} ({Faiss centered IP}, {Faiss direction}, {Faiss raw Lorentz-IP}) and {Milvus}~\cite{wang2021milvus} ({Milvus centered IP}).
+On the mapped {Cohere-1M} benchmark (Figure~\ref{fig:pareto_cohere}), \rquiver{} builds in $35.0$\,s, reaches $99.70\%$ peak Recall@10, and sustains $1{,}930$\,QPS (1T) and $42{,}466$\,QPS (24T) at $\ge 99\%$ recall.
+Across the evaluated external configurations on {Cohere-1M}, {Exact-RobustPrune} reaches $93.94\%$ peak Recall@10 ($75.5$\,s build), {HDB FP32 dynamic} and {HDB FP32 flat} reach $96.78\%$ and $96.67\%$ ($414.8$\,s and $416.3$\,s build), and {HDB FP64 dynamic} and {HDB FP64 flat} reach $94.43\%$ and $94.33\%$ ($866.5$\,s and $869.3$\,s); at matched $95\%$ recall, \rquiver{} delivers $4{,}939$\,QPS (1T) and $96{,}584$\,QPS (24T) compared with $290$\,QPS (1T, $17.0\times$) and $3{,}416$\,QPS (24T, $28.3\times$) for {HDB FP32 dynamic}.
+Among flat {HNSW} proxies with exact FP64 reranking on {Cohere-1M}, {Faiss centered IP} and {Milvus centered IP} peak at $98.91\%$ and $98.69\%$ Recall@10 ($167.3$\,s and $361.7$\,s build; at $98\%$ recall, \rquiver{} attains $2{,}907$\,QPS on 1T and $58{,}162$\,QPS on 24T vs.\ $127$ / $1{,}660$\,QPS for {Faiss centered IP} and $76$ / $999$\,QPS for {Milvus centered IP}), while {Faiss direction} and {Faiss raw Lorentz-IP} reach $65.17\%$ and $0.12\%$.
 
-\paragraph{Construction Speed and Memory Footprint.}
-On {Cohere-1M}, unified \rquiver{} builds a $100\%$-reachable 1M-vertex hyperbolic index in \textbf{$35.0$\,s} on 32 threads---$5.44\times$ faster than {Polar-FP32} ($190.2$\,s) and $1.91\times$ faster than {Polar-SQ8} ($66.9$\,s)---while compressing logical hot navigation state to $485.0$\,MB ($2.60\times$ smaller than {Polar-SQ8} and $7.35\times$ smaller than full-vector traversal; $517.0$\,MB or $2.44\times$ smaller under $4096$\,B \texttt{HotSmPage} co-location).
-On native hyperbolic {MERU-1M} ($512$D), {OpenAI-1536} ($1536$D), and {WordNet-Hazy} ($20$D), 32-thread construction completes in $25.7$\,s, $43.6$\,s, and $1.5$\,s, respectively, with zero unreachable islands across every built graph.
-
-\paragraph{Matched-Recall Throughput and Graph-Quality Crossover.}
-At $\ge 99\%$ Recall@10 on {Cohere-1M}, unified \rquiver{} reaches \textbf{$1{,}930$\,QPS} ($0.62$\,ms p99) on 1 thread and \textbf{$42{,}466$\,QPS} ($1.20$\,ms p99) on 24 threads, improving over {Polar-FP32} by \textbf{$4.30\times$ (1T)} and \textbf{$6.31\times$ (24T)}, and over {Polar-SQ8} by \textbf{$2.20\times$ (1T)} and \textbf{$2.52\times$ (24T)}.
-At $\ge 99.5\%$ Recall@10, adaptive \textsc{CJ-Gate} expansion pushes unified \rquiver{} to \textbf{$738$\,QPS} (1T) and \textbf{$17{,}137$\,QPS} (24T)---outperforming unrescued \rquiver{}-A8 ($688$ / $16{,}059$\,QPS) as well as {Polar-FP32} by \textbf{$2.86\times$ (1T)} and \textbf{$4.35\times$ (24T)}.
-The controlled crossover variants isolate why:
-running exact FP32 navigation over the 2-bit-constructed graph (\textsc{SameGraph-FP32}) achieves $454$\,QPS at $99\%$ recall versus $448$\,QPS on the FP32-constructed graph, confirming that polar 2-bit {SM} comparisons preserve {Vamana} topology quality at $>5\times$ lower build cost;
-meanwhile, replacing search-time FP32 reads with the 2-bit page-co-located engine accelerates traversal on that identical graph by $4.25\times$ under unified \rquiver{} ($4.56\times$ under \rquiver{}-A8) at $99\%$ recall and $6.53\times$ at $99.5\%$ recall ($738$ vs.\ $113$\,QPS).
-On native hyperbolic {MERU-1M}, unified \rquiver{} achieves $2{,}547$\,QPS (1T) and $53{,}483$\,QPS (24T) at $99.25\%$ Recall@10 ($1{,}669$ and $36{,}092$\,QPS at $99.76\%$ Recall@10); on 1536D {OpenAI-1536}, it sustains $792$\,QPS (1T) and $14{,}731$\,QPS (24T) at $99.24\%$ Recall@10; and on 20D {WordNet-Hazy}, it reaches $3{,}089$\,QPS (1T) and $65{,}405$\,QPS (24T) at $99.36\%$ Recall@10 ($2{,}341$ and $52{,}371$\,QPS at $99.79\%$).
-
-\subsection{Comparison with Hyperbolic and Flat-Proxy Engines}
-\label{subsec:eval_external}
-
-\begin{table}[t]
-  \centering
-  \caption{External baseline comparison at Recall@10 $\ge 99\%$ on AMD EPYC 9654 (Zen~4, 32 build threads, exact FP64 geodesic ground truth).}
-  \label{tab:external_baselines}
-  \small
-  \setlength{\tabcolsep}{2.8pt}
-  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}Xlrrrr@{}}
-    \toprule
-    \textbf{System} & \textbf{Metric} & \textbf{\shortstack{Build\\(s)}} & \textbf{\shortstack{1T\\QPS}} & \textbf{\shortstack{24T\\QPS}} & \textbf{p99} \\
-    \midrule
-    \multicolumn{6}{@{}l}{\textbf{Cohere-1M ($768$D, Hollow Boundary Shell)}} \\
-    \midrule
-    \textbf{\rquiver{}} & Polar 2b+64 & \textbf{35.0} & \textbf{1,930} & \textbf{42,466} & \textbf{0.62} \\
-    Polar-FP32 & Polar 32b+64 & 190.2 & 448 & 6,735 & 2.69 \\
-    Exact-RobustPrune~\cite{prokhorenkova2022hyperbolic} & Geodesic & 75.5 & \multicolumn{3}{c}{\emph{Max 94.0\% (92@1T)}$^\ddagger$} \\
-    HyperspaceDB-FP32~\cite{glukhota2026hyperspacedb} & Native Hyp. & 414.0$^\S$ & \multicolumn{3}{c}{\emph{Max 96.7\% (258@95\%)}$^\S$} \\
-    HyperspaceDB-FP64~\cite{glukhota2026hyperspacedb} & Native Hyp. & 290.3$^\parallel$ & \multicolumn{3}{c}{\emph{Max 90.0\% ($M{=}16$)$^\parallel$}} \\
-    Faiss-HNSW~\cite{douze2024faiss} & IP+Rerank & \emptycell & \emptycell & \emptycell & \emptycell \\
-    Milvus-HNSW~\cite{wang2021milvus} & IP+Rerank & \emptycell & \emptycell & \emptycell & \emptycell \\
-    \midrule
-    \multicolumn{6}{@{}l}{\textbf{MERU--ImageNet-1M ($512$D, Native Lorentz Hyperboloid)}} \\
-    \midrule
-    \textbf{\rquiver{}} & Polar 2b+64 & \textbf{25.7} & \textbf{2,547} & \textbf{53,483} & \textbf{0.50} \\
-    Faiss-HNSW~\cite{douze2024faiss} & IP+Rerank & \emptycell & \emptycell & \emptycell & \emptycell \\
-    Milvus-HNSW~\cite{wang2021milvus} & IP+Rerank & \emptycell & \emptycell & \emptycell & \emptycell \\
-    \bottomrule
-  \end{tabularx}
-  \par\vspace{2pt}
-  {\footnotesize \textit{Note:} Latency p99 is in ms (1T); \emptycell{} denotes pending flat-proxy log import. $^\ddagger$\textsc{Exact-RobustPrune} ($452.0$\,MB, $175$ zero-in islands) saturates at $94.02\%$ ($\mathrm{ef}=2{,}048$, $12.77$\,ms p99). $^\S${HyperspaceDB-FP32} ($M=32, L_c=256$, $3{,}225.4$\,MB, $291$K/$300$K zero-in islands): \texttt{dynamic}/\texttt{flat} build in $414.0$/$415.6$\,s, reach $258$/$270$\,QPS (1T, $5.30$/$4.91$\,ms) and $3{,}124$/$3{,}572$\,QPS (24T) at $\ge 95\%$ recall, and saturate at $96.67\%$/$96.59\%$ ($\mathrm{ef}=4{,}096$, $23$/$27$\,QPS). $^\parallel$Two-seed $M=16$ FP64 ($6.45$\,GB, $90.02\%$ max at $10.3$\,QPS; single-seed $M=32$ reaches $94.43\%$ at $6.6$\,QPS).}
-\end{table}
-
-Table~\ref{tab:external_baselines} compares \rquiver{} against exact geodesic {Vamana} (\textsc{Exact-RobustPrune}~\cite{prokhorenkova2022hyperbolic}), native hyperbolic {HyperspaceDB}~\cite{glukhota2026hyperspacedb}, and flat inner-product {HNSW} engines ({Faiss-HNSW}~\cite{douze2024faiss}, {Milvus-HNSW}~\cite{wang2021milvus}) paired with exact FP64 hyperbolic reranking.
-On {Cohere-1M}, both existing hyperbolic baselines hit hard recall ceilings well below $98\%$--$99\%$:
-\textsc{Exact-RobustPrune} ($452.0$\,MB, $75.5$\,s build) leaves $175$ zero-in-degree islands and saturates at $94.02\%$ Recall@10 ($91.9$\,QPS at $12.77$\,ms p99), even at $\mathrm{ef}=2{,}048$;
-similarly, {HyperspaceDB-FP32} ($M=32, L_c=256$) consumes $3{,}225.4$\,MB ($6.65\times$ larger than \rquiver{}'s split payload), leaves $290{,}564$ (\texttt{dynamic}) to $299{,}968$ (\texttt{flat}) zero-in-degree vertices, takes $11.8\times$ longer to build ($414.0$/$415.6$\,s), delivers $19.2\times$ (1T: $258$ vs.\ $4{,}939$\,QPS) and $30.9\times$ (24T: $3{,}124$ vs.\ $96{,}584$\,QPS) lower throughput than \rquiver{} at $\ge 95\%$ recall, and plateaus at $96.67\%$ (\texttt{dynamic}) / $96.59\%$ (\texttt{flat}) at $\mathrm{ef}=4{,}096$.
-Enabling full FP64 coordinates in {HyperspaceDB-FP64} doubles RAM to $6.45$\,GB without breaking the recall cap ($90.02\%$ for $M=16$, $94.43\%$ single-seed $M=32$), confirming that the bottleneck is topological occlusion rather than arithmetic precision, whereas flat inner-product proxies rank candidates by $\langle q, v\rangle = r_q r_v \gamma_{qv}$ and systematically over-rank large-radius distractors.
+On native hyperbolic {MERU-1M} (Figure~\ref{fig:pareto_meru}), where radial depth variance is wider and interior connectivity is denser, all external systems except {Faiss raw Lorentz-IP} ($93.86\%$ peak) reach $99\%$ recall.
+At $\ge 99\%$ Recall@10, \rquiver{} builds in $25.7$\,s and achieves \textbf{$2{,}547$\,QPS} (1T, $0.50$\,ms p99), outperforming {HDB FP32 flat} ($1{,}296$\,QPS, $1.97\times$), {HDB FP32 dynamic} ($1{,}188$\,QPS, $2.14\times$), {Faiss direction} ($1{,}078$\,QPS, $2.36\times$), {Faiss centered IP} ($1{,}059$\,QPS, $2.41\times$), {Milvus centered IP} ($260$\,QPS, $9.80\times$), and {HDB FP64 dynamic/flat} ($196$/$93$\,QPS, $13.0\times$/$27.4\times$).
+On 24 threads, \rquiver{}'s compact working set widens its advantage to \textbf{$53{,}483$\,QPS} versus $15{,}890$\,QPS for {HDB FP32 flat} ($3.37\times$), $14{,}967$\,QPS for {Faiss direction} ($3.57\times$), $13{,}780$\,QPS for {HDB FP32 dynamic} ($3.88\times$), $13{,}005$\,QPS for {Faiss centered IP} ($4.11\times$), $4{,}098$\,QPS for {HDB FP64 dynamic} ($13.1\times$), $1{,}933$\,QPS for {HDB FP64 flat} ($27.7\times$), and $1{,}130$\,QPS for {Milvus centered IP} ($47.3\times$).
+The full-range plots in Figure~\ref{fig:real_pareto} also retain low-recall operating points, while the high-recall detail views expose the $90\%\text{--}100\%$ trade-offs directly.
 
 \subsection{Multi-Threaded Scaling Efficiency}
 \label{subsec:eval_scaling}
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
   \begin{subfigure}[t]{0.485\linewidth}
     \centering
@@ -179,20 +174,20 @@ Enabling full FP64 coordinates in {HyperspaceDB-FP64} doubles RAM to $6.45$\,GB 
     \caption{MERU-1M ($\ge 99\%$ Recall)}
     \label{fig:scale_meru}
   \end{subfigure}
-  \caption{Multi-threaded query scaling from 1 to 24 threads on Zen~4 at Recall@10 $\ge 99\%$ (three-graph means of {\rquiver{}-A8} vs.\ polar baselines).}
+  \caption{Multi-threaded query scaling from 1 to 24 threads on Zen~4 at Recall@10 $\ge 99\%$. On {Cohere-1M}, \rquiver{} is compared against {Polar-SQ8} and {Polar-FP32} (three-graph means with min--max error bars; external baseline peak recalls are reported in Table~\ref{tab:external_baselines}). On {MERU-1M}, \rquiver{} is compared against all external systems reaching $99\%$ recall; each method selects its fastest qualifying configuration per thread count.}
   \label{fig:scaling}
-\end{figure}
+\end{figure*}
 
 Figure~\ref{fig:scaling} reports throughput scaling from $1$ to $24$ threads at $\ge 99\%$ Recall@10.
-Because \rquiver{}'s $485$\,MB hot working set fits largely within aggregate {EPYC 9654} L3 cache capacity and touches only $0.5\text{--}3$ cache lines per visited neighbor on a single $4$\,KiB page, unified \rquiver{} scales by \textbf{$22.0\times$} at 24 threads on {Cohere-1M} ($1{,}930 \to 42{,}466$\,QPS, $91.7\%$ parallel efficiency), \textbf{$21.0\times$} on {MERU-1M} ($2{,}547 \to 53{,}483$\,QPS), \textbf{$18.6\times$} on {OpenAI-1536} ($792 \to 14{,}731$\,QPS), and \textbf{$21.2\times$} on {WordNet-Hazy} ($3{,}089 \to 65{,}405$\,QPS).
-By contrast, {Polar-FP32} fetches $12$ cache lines ($3{,}072$\,B) per visited neighbor from a $3.56$\,GB footprint, saturating memory bandwidth and scaling by $15.0\times$ at 24 threads ($448 \to 6{,}735$\,QPS), which widens \rquiver{}'s throughput speedup from $4.30\times$ on 1 thread to \textbf{$6.31\times$ on 24 threads}.
+With stateless, read-only traversal over a compact hot working set ($485.0$\,MB logical and $517.0$\,MB page-co-located on {Cohere-1M}, reading $64\text{--}256$\,B per visited neighbor at $D=768$ with header, sketch, and complete bitplanes co-located on a single $4$\,KiB page), \rquiver{} scales by \textbf{$22.0\times$} at 24 threads on {Cohere-1M} ($1{,}930 \to 42{,}466$\,QPS, $91.7\%$ parallel efficiency; Figure~\ref{fig:scale_cohere}), \textbf{$21.0\times$} on {MERU-1M} ($2{,}547 \to 53{,}483$\,QPS), \textbf{$18.6\times$} on {OpenAI-1536} ($792 \to 14{,}731$\,QPS), and \textbf{$21.2\times$} on {WordNet-Hazy} ($3{,}089 \to 65{,}405$\,QPS).
+By contrast, {Polar-FP32} reads $3{,}072$\,B ($48$ cache lines) per visited neighbor across a $3.56$\,GB footprint and scales by $15.0\times$ at 24 threads on {Cohere-1M} ($448 \to 6{,}735$\,QPS), widening \rquiver{}'s speedup from $4.30\times$ (1T) to \textbf{$6.31\times$ (24T)}; similarly, on {MERU-1M} (Figure~\ref{fig:scale_meru}), in-process FP32 systems scale by $11.6\times\text{--}12.3\times$ ({HDB FP32 dynamic/flat}: $1{,}188 \to 13{,}780$\,QPS and $1{,}296 \to 15{,}890$\,QPS; {Faiss centered IP}: $1{,}059 \to 13{,}005$\,QPS) and {Milvus centered IP} scales by $4.3\times$ ($260 \to 1{,}130$\,QPS), further widening \rquiver{}'s multi-threaded lead.
 
 \subsection{Geometry and Execution Ablation Study}
 \label{subsec:eval_ablation}
 
 \begin{table}[t]
   \centering
-  \caption{Controlled component ablations on {Cohere-1M} around the unrescued {\rquiver{}-A8} configuration (Zen~4, 1 thread, three-graph means).}
+  \caption{Controlled component ablations around {\rquiver{}-Core} on {Cohere-1M} (Zen~4, 1 thread, three-graph means).}
   \label{tab:ablation_cohere}
   \small
   \setlength{\tabcolsep}{3pt}
@@ -202,17 +197,17 @@ By contrast, {Polar-FP32} fetches $12$ cache lines ($3{,}072$\,B) per visited ne
     \cmidrule(lr){4-5}
     \textbf{Variant} & \textbf{Islands} & \textbf{32T (s)} & \textbf{$\ge 99\%$} & \textbf{$\ge 99.5\%$} \\
     \midrule
-    \textbf{\rquiver{}-A8 (Full Core)} & \textbf{0} & 32.5 & \textbf{2,071} (0.56) & \textbf{688} (1.63) \\
+    \textbf{\rquiver{}-Core} & \textbf{0} & 32.5 & \textbf{2,071} (0.56) & \textbf{688} (1.63) \\
     w/o \texttt{SymSketch256} & 0 & 32.5 & 1,909 (0.60) & 593 (1.90) \\
     w/o \texttt{HotSmPage} ({SoA}) & 0 & 32.5 & 1,752 (0.65) & 537 (2.11) \\
     w/o \textsc{Stage-0.5} Asym Gate & 0 & 32.5 & 1,659 (0.70) & 435 (2.66) \\
     w/o Chord-Swap Repair & 518 & 32.4 & 1,723 (0.66) & 540 (2.08) \\
-    w/o 4-Way Compass & 0 & \textbf{29.2} & 394 (2.92) & \emph{Unreached} \\
+    w/o QuadriPrune & 0 & \textbf{29.2} & 394 (2.92) & \emph{Unreached} \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
   \begin{subfigure}[t]{0.485\linewidth}
     \centering
@@ -226,20 +221,20 @@ By contrast, {Polar-FP32} fetches $12$ cache lines ($3{,}072$\,B) per visited ne
     \caption{Representation crossover}
     \label{fig:abl_repr}
   \end{subfigure}
-  \caption{Single-thread ablation Pareto curves around {\rquiver{}-A8} on {Cohere-1M} (Zen~4).}
+  \caption{Single-thread ablation Pareto curves around {\rquiver{}-Core} on {Cohere-1M} (Zen~4, three-graph means; error bars show graph min--max). In the geometry panel, ``w/o Stage-0.5 gate'' and ``w/o Chord-Swap'' correspond to {w/o \textsc{Stage-0.5} Asym Gate} and {w/o Chord-Swap Repair} in Table~\ref{tab:ablation_cohere}; in the representation crossover (matched {SoA} search policy), ``2-bit SM (same graph)'' denotes {w/o \texttt{HotSmPage} ({SoA})}, while ``SQ8 (same graph)'' and ``FP32 (same graph)'' denote {SameGraph-SQ8} and {SameGraph-FP32} in Table~\ref{tab:zen4_repr}.}
   \label{fig:ablation_pdf}
-\end{figure}
+\end{figure*}
 
-Table~\ref{tab:ablation_cohere} and Figure~\ref{fig:ablation_pdf} quantify each topological and execution component on {Cohere-1M}:
+Table~\ref{tab:ablation_cohere} and Figure~\ref{fig:ablation_pdf} (Figures~\ref{fig:abl_geom}--\ref{fig:abl_repr}) quantify each topological and execution component on {Cohere-1M}:
 \begin{itemize}
-  \item \emph{4-Way Riemannian Compass ($5.26\times$ throughput gain):}
-  Replacing Compass quotas and stem-excess dominance with global hyperbolic $\alpha$-pruning triggers the Apollonius black-hole occlusion of Theorem~\ref{thm:vamana_pathologies}(1), dropping $99\%$-recall QPS from $2{,}071$ to $394$ ($2.92$\,ms p99) and failing to reach $99.5\%$ recall even at $L = 2{,}048$.
-  \item \emph{\textsc{Stage-0.5} Asymmetric Refinement ($+58.2\%$ at $99.5\%$ recall):}
+  \item \emph{QuadriPrune ($5.26\times$ throughput gain):}
+  Replacing {QuadriPrune}'s four-channel quotas and stem-excess dominance with global hyperbolic $\alpha$-pruning produces the radial occlusion characterized by Theorem~\ref{thm:vamana_pathologies}(1), dropping $99\%$-recall QPS from $2{,}071$ to $394$ ($2.92$\,ms p99) and failing to reach $99.5\%$ recall even at $L = 2{,}048$.
+  \item \emph{\textsc{Stage-0.5} Asymmetric Refinement ({w/o \textsc{Stage-0.5} Asym Gate} in Table~\ref{tab:ablation_cohere}, $+58.2\%$ at $99.5\%$ recall):}
   Removing lazy orthogonal-projection re-scoring leaves cross-shell query error $d_q\,\eta_q(u_x)$ uncancelled during pool truncation (Theorem~\ref{thm:conformal_flip}(2)), reducing $99.5\%$-recall throughput from $688$ to $435$\,QPS ($1{,}659$\,QPS at $99\%$ recall).
   \item \emph{Spanning-Tree Chord-Swap Repair:}
   Omitting chord swaps leaves $518$ zero-in-degree boundary islands per million vertices and lowers {SoA} $99\%$-recall QPS from $1{,}752$ to $1{,}723$.
   \item \emph{\texttt{HotSmPage} and \texttt{SymSketch256} ($+18.2\%$ at $99\%$, $+28.1\%$ at $99.5\%$ recall):}
-  Single-page $4096$\,B co-location lifts $99\%$-recall QPS from $1{,}752$ to $1{,}909$ ($+9.0\%$) by eliminating secondary {DTLB} walks; adding binomial-stabilized \texttt{SymSketch256} ($57.6\%$ Stage-1a head-row skip rate) reaches $2{,}071$\,QPS ($688$\,QPS vs.\ $537$\,QPS at $99.5\%$ recall).
+  Single-page $4096$\,B co-location lifts $99\%$-recall QPS from $1{,}752$ to $1{,}909$ ($+9.0\%$) by eliminating secondary {DTLB} walks; adding binomial-stabilized \texttt{SymSketch256} ($57.6\%$ header-line bitplane skip rate) reaches $2{,}071$\,QPS ($688$\,QPS vs.\ $537$\,QPS at $99.5\%$ recall).
 \end{itemize}
 
 \subsection{Synthetic Stress Tests, Recall-Loss Audit, and Applicability Boundaries}
@@ -247,15 +242,15 @@ Table~\ref{tab:ablation_cohere} and Figure~\ref{fig:ablation_pdf} quantify each 
 
 \begin{table}[t]
   \centering
-  \caption{Synthetic extreme manifolds and real-manifold trade-offs under unified Zen~4 evaluation (\rquiver{} \texttt{A1B1C1} vs.\ unrescued \texttt{A0B0C0}, $0$\,B/vertex overhead; \emptycell{} denotes queued HDB/Faiss/Milvus runs).}
+  \caption{Synthetic extreme manifolds and real-manifold trade-offs on Zen~4 (complete \rquiver{} with tangent-cone rescue and adaptive \textsc{CJ-Gate} vs.\ \textbf{Global-SM} without cone rescue or \textsc{CJ-Gate}, $0$\,B/vertex overhead).}
   \label{tab:synthetic_rescue}
-  \small
-  \setlength{\tabcolsep}{2.2pt}
+  \footnotesize
+  \setlength{\tabcolsep}{1.7pt}
   \begin{tabular}{@{}lrrrrrr@{}}
     \toprule
     & \multicolumn{2}{c}{\textbf{Max Rec@10}} & & \multicolumn{3}{c}{\textbf{$\ge 99\%$ QPS (Zen~4)}} \\
     \cmidrule(lr){2-3}\cmidrule(lr){5-7}
-    \textbf{Dataset} & \textbf{Base} & \textbf{\rquiver{}} & \textbf{Cones} & \textbf{Base 1T} & \textbf{\rquiver{} 1T} & \textbf{\rquiver{} 24T} \\
+    \textbf{Dataset} & \textbf{\shortstack{Global\\SM}} & \textbf{\rquiver{}} & \textbf{Cones} & \textbf{\shortstack{Global\\SM 1T}} & \textbf{\rquiver{} 1T} & \textbf{\rquiver{} 24T} \\
     \midrule
     Clustered-Narrow & 34.22\% & \textbf{99.95\%} & 256 & \emph{Unr.} & \textbf{1,840} & \textbf{38,876} \\
     Clustered-Wide & 73.87\% & \textbf{100.00\%} & 256 & \emph{Unr.} & \textbf{2,704} & \textbf{57,144} \\
@@ -271,9 +266,26 @@ Table~\ref{tab:ablation_cohere} and Figure~\ref{fig:ablation_pdf} quantify each 
     \bottomrule
   \end{tabular}
   \par\vspace{2pt}
-  {\footnotesize $^\dagger$At $\ge 98\%$ Recall@10 ($98.51\%$ at $L=1{,}536, B=128$; Base caps at $97.93\%$). $^\ddagger$On the 32-query diagnostic probe, exact FP32 geodesic traversal over the same degree-32 graph visits and returns $62.2\%$ ($\mathcal{L}_{\mathrm{beam}}=\mathcal{L}_{\mathrm{gate}}=0\%$), confirming an $\mathbb{S}^{511}$ bounded-degree limit. External HDB/Faiss/Milvus sweeps on the four synthetic stress distributions remain queued (\emptycell{}).}
+  {\footnotesize $^\dagger$At $\ge 98\%$ Recall@10 ($98.51\%$ at $L=1{,}536, B=128$; {Global-SM} caps at $97.93\%$). $^\ddagger$On the 32-query diagnostic probe, exact FP32 geodesic traversal over the same degree-32 graph visits and returns $62.2\%$ ($\mathcal{L}_{\mathrm{beam}}=\mathcal{L}_{\mathrm{gate}}=0\%$), characterizing traversal loss on this constructed graph.}
 \end{table}
 
+\begin{table*}[t]
+  \centering
+  \caption{Measured comparison on all four synthetic distributions (1M vectors, 512D, Zen~4). Each QPS column selects the fastest measured configuration reaching its Recall@10 threshold. Panels (a) and (b) report one and 24 query threads.}
+  \label{tab:synthetic_external}
+  \footnotesize
+  \setlength{\tabcolsep}{2pt}
+  \input{tables/synthetic_comparison}
+  \par\vspace{2pt}
+  {\footnotesize \textit{Note:} Each row uses one graph and 32 build threads. \rquiver{} uses $M/L_c=16/128$ and search widths through $2{,}048$; the three external baselines use $32/256$ and widths through $4{,}096$. Every timed test condition processes $2{,}000$ queries over five rounds. Peak recall is the largest measured 1T value. The p99 column uses the selected $99\%$-qualifying 1T point. A dash denotes the absence of a qualifying measured point for that thread count. Existing measured configurations supply the $90\%$ and $95\%$ selections.}
+\end{table*}
+
+\paragraph{External Comparisons Across Distributions.}
+Table~\ref{tab:synthetic_external} reports all 12 external-baseline builds alongside \rquiver{} on the four synthetic distributions. On {Clustered-Narrow}, at Recall@10 $\ge99\%$, \rquiver{} reaches $1{,}840$\,QPS (1T) and $38{,}876$\,QPS (24T), compared with HDB FP32 flat at $998$ and $13{,}311$\,QPS ($1.84\times$ and $2.92\times$). Their selected points attain $99.385\%$ and $99.5\%$ recall, respectively. On {Clustered-Wide}, the corresponding rates are $2{,}704$/$57{,}144$ for \rquiver{} and $735$/$12{,}519$ for HDB ($3.68\times$/$4.56\times$), at $99.61\%$ and $99.495\%$ recall. These are common-threshold throughput comparisons across the reported construction budgets.
+Centered Faiss and Milvus attain peak recalls of $21.245\%$/$19.525\%$ on {Clustered-Narrow} and $4.015\%$/$9.33\%$ on {Clustered-Wide}. On {Uniform-Wide}, peak recalls are $98.88\%$ for \rquiver{}, $97.86\%$ for HDB, $48.64\%$ for Faiss, and $54.04\%$ for Milvus. The {Uniform-Narrow} results expose a separate recall weakness of the current \rquiver{} configuration, analyzed below.
+
+% 将召回审计移到下一栏，给分解公式保留完整空间。
+\newpage
 \paragraph{Four-Stage Telescoping Recall-Loss Audit.}
 To pinpoint where candidates are lost on pathological manifolds, let $G_k(q)$ be the exact top-$k$ set, $V(q)$ the vertices visited during traversal, $C_L(q) \subseteq V(q)$ the retained beam pool of size $L$, $F_B(q) \subseteq C_L(q)$ the candidates admitted to exact reranking, and $R_k(q) \subseteq F_B(q)$ the returned top-$k$.
 Because $R_k(q) \subseteq F_B(q) \subseteq C_L(q) \subseteq V(q)$, recall miss decomposes telescopically with zero overlap\ifpreprint\ (Appendix~\ref{app:loss_decomposition})\fi:
@@ -291,14 +303,14 @@ Because $R_k(q) \subseteq F_B(q) \subseteq C_L(q) \subseteq V(q)$, recall miss d
   \label{eq:four_stage_loss}
 \end{equation}
 \endgroup
-On {Clustered-Narrow-1M} ($256$ tight cones at $\rho \in [3.9, 4.1]$) at $L=256, B=128$, auditing unrescued global {SM} (\texttt{A0B0C0}) on the diagnostic subset reveals $|G_{10} \cap V| / 10 = 93.9\%$ ($\mathcal{L}_{\mathrm{reach}} = 6.1\%$), yet pool retention drops to $49.3\%$ ($\mathcal{L}_{\mathrm{beam}} = 44.6\%$) and rerank admission drops to $33.0\%$ ($\mathcal{L}_{\mathrm{gate}} = 16.3\%, \mathcal{L}_{\mathrm{rerank}} = 0\%$; $34.22\%$ across all $2{,}000$ queries).
-Consistent with Theorem~\ref{thm:tangent_cone}(2), increasing $L$ from $256$ to $2{,}048$ at fixed $B = 128$ monotonically \emph{lowers} unrescued recall from $34.22\%$ ($2{,}071$\,QPS) through $31.78\%$ ($L=512$) and $29.43\%$ ($L=1{,}024$) down to $27.80\%$ ($L=2{,}048$) via intra-cluster pool dilution.
+On {Clustered-Narrow} ($N=1\text{M}$, $256$ tight cones at $\rho \in [3.9, 4.1]$) at $L=256, B=128$, auditing {Global-SM} without tangent-cone rescue or \textsc{CJ-Gate} on the diagnostic subset reveals $|G_{10} \cap V| / 10 = 93.9\%$ ($\mathcal{L}_{\mathrm{reach}} = 6.1\%$), yet pool retention drops to $49.3\%$ ($\mathcal{L}_{\mathrm{beam}} = 44.6\%$) and rerank admission drops to $33.0\%$ ($\mathcal{L}_{\mathrm{gate}} = 16.3\%, \mathcal{L}_{\mathrm{rerank}} = 0\%$; $34.22\%$ across all $2{,}000$ queries).
+Consistent with Theorem~\ref{thm:tangent_cone}(2), increasing $L$ from $256$ to $2{,}048$ at fixed $B = 128$ monotonically \emph{lowers} {Global-SM} recall from $34.22\%$ ($2{,}071$\,QPS) through $31.78\%$ ($L=512$) and $29.43\%$ ($L=1{,}024$) down to $27.80\%$ ($L=2{,}048$) via intra-cluster pool dilution.
 
 \paragraph{Tangent-Cone {$\MNR$} Recovery and Real-Manifold Gains.}
-Table~\ref{tab:synthetic_rescue} demonstrates that unified \rquiver{}'s purity-gated \texttt{ResidualConeDict} automatically detects all $256$ tight cones ($0$\,B/vertex) on both synthetic clustered benchmarks, lifting {Clustered-Narrow-1M} at fixed $L=256, B=128$ from $34.22\%$ to \textbf{$99.39\%$} Recall@10 ($1{,}840$\,QPS 1T and $38{,}876$\,QPS 24T; climbing to $99.80\%$ at $L=384, B=128$ and $99.95\%$ peak) and lifting {Clustered-Wide-1M} from $73.87\%$ to \textbf{$99.61\%$} at $L=192, B=64$ ($2{,}704$\,QPS 1T and $57{,}144$\,QPS 24T; $99.995\%$ peak).
+Table~\ref{tab:synthetic_rescue} demonstrates that \rquiver{}'s purity-gated \texttt{ResidualConeDict} automatically detects all $256$ tight cones ($0$\,B/vertex) on both synthetic clustered benchmarks, lifting {Clustered-Narrow} at fixed $L=256, B=128$ from $34.22\%$ to \textbf{$99.39\%$} Recall@10 ($1{,}840$\,QPS 1T and $38{,}876$\,QPS 24T; climbing to $99.80\%$ at $L=384, B=128$ and $99.95\%$ peak) and lifting {Clustered-Wide} from $73.87\%$ to \textbf{$99.61\%$} at $L=192, B=64$ ($2{,}704$\,QPS 1T and $57{,}144$\,QPS 24T; $99.995\%$ peak).
 On the unclustered real benchmarks ({Cohere-1M}, {MERU-1M}, {OpenAI-1536}, and {WordNet-Hazy}), the strict purity gate retains \textbf{$0$ cones}, avoiding unnecessary residual dictionary construction while adaptive \textsc{CJ-Gate} and variance-stabilized sketching raise {Cohere-1M} $99.5\%$-recall QPS by \textbf{$+63.7\%$} ($451 \to 738$\,QPS 1T, $17{,}137$\,QPS 24T) and {MERU-1M} $99\%$-recall QPS by \textbf{$+76.5\%$} ($1{,}443 \to 2{,}547$\,QPS 1T, $53{,}483$\,QPS 24T) at $<3.5\%$ overhead on 1536D {OpenAI-1536} ($792$ vs.\ $820$\,QPS).
 
-\paragraph{Separating Quantization Limits from Intrinsic $\mathbb{S}^{511}$ Dimensionality.}
-On {Uniform-Narrow-1M} (1M points drawn uniformly on $\mathbb{S}^{511}$ inside $\rho \in [3.9, 4.1]$, local intrinsic dimensionality $\text{LID} \approx 511$~\cite{houle2017lid}), maximum recall within $L \le 2{,}048$ reaches $64.74\%$ ($62.41\%$ unrescued).
-Running \emph{exact FP32 geodesic search} over the identical degree-32 graph on the $32$-query diagnostic probe achieves $62.2\%$ Recall@10 with $\mathcal{L}_{\mathrm{beam}} = \mathcal{L}_{\mathrm{gate}} = 0\%$, demonstrating that this ceiling arises from bounded-degree graph navigability on high-dimensional isotropic spheres ($\gamma_{qv} \sim \mathcal{N}(0, 1/512)$) rather than 2-bit quantization.
-Widening radial depth to $\rho \in [0.4, 6.0]$ ({Uniform-Wide-1M}) enables exact polar radial lower-bound pruning (Proposition~\ref{prop:geodesic_apex}(1)) across shells and restores Recall@10 above $98\%$ (\textbf{$98.88\%$} peak, $300$\,QPS 1T and $6{,}739$\,QPS 24T at $98.51\%$).
+\paragraph{Topology-Dependent Limits on Isotropic Narrow Shells.}
+On {Uniform-Narrow} (1M points with uniform directions on $\mathbb{S}^{511}$, $\rho \in [3.9, 4.1]$, and local intrinsic dimensionality $\mathrm{LID} \approx 511$~\cite{houle2017lid}), \rquiver{} reaches $64.735\%$ recall within $L\le2{,}048$ ($62.41\%$ under {Global-SM}). HDB FP32 flat reaches $85.08\%$ at $ef=2{,}048$ and $92.17\%$ at $ef=4{,}096$ on the full $2{,}000$-query test set. Faiss and Milvus peak at $29.86\%$ and $46.445\%$, respectively. HDB therefore achieves substantially higher recall on this distribution under its tested configuration.
+Exact FP32 geodesic search over the same \rquiver{} degree-32 graph achieves $62.2\%$ Recall@10 on the separate $32$-query diagnostic probe, with $\mathcal{L}_{\mathrm{beam}}=\mathcal{L}_{\mathrm{gate}}=0\%$. This probe isolates traversal loss on that constructed topology. Together, the same-graph diagnostic and full-test cross-system measurements identify {Uniform-Narrow} as an applicability weakness of the present \rquiver{} graph and routing configuration. The HDB comparison also uses the larger $M/L_c=32/256$ construction budget, while \rquiver{} uses $16/128$.
+Widening radial depth to $\rho \in [0.4, 6.0]$ ({Uniform-Wide}) enables exact polar radial lower-bound pruning (Proposition~\ref{prop:geodesic_apex}(1)) across shells and restores Recall@10 above $98\%$ (\textbf{$98.88\%$} peak, $300$\,QPS 1T and $6{,}739$\,QPS 24T at $98.51\%$).

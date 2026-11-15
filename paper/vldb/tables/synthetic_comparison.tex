@@ -1,0 +1,53 @@
+\begin{tabular}{@{}llrrrrrrrrr@{}}
+\multicolumn{11}{@{}l}{\textbf{(a) Single-thread QPS}} \\
+\toprule
+\textbf{Dataset} & \textbf{Method} & \textbf{$M/L_c$} & \textbf{\shortstack{Build\\32T (s)}} & \textbf{\shortstack{Peak\\Rec@10}} & \textbf{$\ge90\%$} & \textbf{$\ge95\%$} & \textbf{$\ge98\%$} & \textbf{$\ge99\%$} & \textbf{$\ge99.5\%$} & \textbf{\shortstack{p99 (ms)\\at $99\%$}} \\
+\midrule
+Uniform-Narrow & Pelorus & 16/128 & 46.8 & 64.735\% & \missing & \missing & \missing & \missing & \missing & \missing \\
+ & HDB FP32 flat & 32/256 & 478.2 & 92.170\% & 18 & \missing & \missing & \missing & \missing & \missing \\
+ & Faiss centered IP & 32/256 & 311.3 & 29.860\% & \missing & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & 32/256 & 573.6 & 46.445\% & \missing & \missing & \missing & \missing & \missing & \missing \\
+\midrule
+Uniform-Wide & Pelorus & 16/128 & 31.9 & 98.880\% & 639 & 397 & 300 & \missing & \missing & \missing \\
+ & HDB FP32 flat & 32/256 & 299.6 & 97.860\% & 241 & 103 & \missing & \missing & \missing & \missing \\
+ & Faiss centered IP & 32/256 & 140.1 & 48.640\% & \missing & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & 32/256 & 255.1 & 54.040\% & \missing & \missing & \missing & \missing & \missing & \missing \\
+\midrule
+Clustered-Narrow & Pelorus & 16/128 & 25.3 & 99.945\% & 3,371 & 2,875 & 2,092 & 1,840 & 1,551 & 0.67 \\
+ & HDB FP32 flat & 32/256 & 106.4 & 99.950\% & 1,568 & 1,315 & 1,133 & 998 & 998 & 1.33 \\
+ & Faiss centered IP & 32/256 & 35.2 & 21.245\% & \missing & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & 32/256 & 146.8 & 19.525\% & \missing & \missing & \missing & \missing & \missing & \missing \\
+\midrule
+Clustered-Wide & Pelorus & 16/128 & 19.4 & 99.995\% & 4,113 & 3,572 & 3,141 & 2,704 & 2,704 & 0.44 \\
+ & HDB FP32 flat & 32/256 & 73.7 & 99.500\% & 1,037 & 908 & 735 & 735 & 645 & 2.14 \\
+ & Faiss centered IP & 32/256 & 38.3 & 4.015\% & \missing & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & 32/256 & 273.7 & 9.330\% & \missing & \missing & \missing & \missing & \missing & \missing \\
+\bottomrule
+\end{tabular}
+\par\vspace{5pt}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}llrrrrr@{}}
+\multicolumn{7}{@{}l}{\textbf{(b) 24-thread QPS}} \\
+\toprule
+\textbf{Dataset} & \textbf{Method} & \textbf{$\ge90\%$} & \textbf{$\ge95\%$} & \textbf{$\ge98\%$} & \textbf{$\ge99\%$} & \textbf{$\ge99.5\%$} \\
+\midrule
+Uniform-Narrow & Pelorus & \missing & \missing & \missing & \missing & \missing \\
+ & HDB FP32 flat & 288 & \missing & \missing & \missing & \missing \\
+ & Faiss centered IP & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & \missing & \missing & \missing & \missing & \missing \\
+\midrule
+Uniform-Wide & Pelorus & 9,363 & 9,363 & 6,739 & \missing & \missing \\
+ & HDB FP32 flat & 1,727 & 1,072 & \missing & \missing & \missing \\
+ & Faiss centered IP & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & \missing & \missing & \missing & \missing & \missing \\
+\midrule
+Clustered-Narrow & Pelorus & 55,231 & 55,231 & 44,175 & 38,876 & 33,132 \\
+ & HDB FP32 flat & 17,024 & 17,024 & 14,483 & 13,311 & 13,311 \\
+ & Faiss centered IP & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & \missing & \missing & \missing & \missing & \missing \\
+\midrule
+Clustered-Wide & Pelorus & 72,780 & 72,780 & 70,801 & 57,144 & 57,144 \\
+ & HDB FP32 flat & 15,090 & 15,090 & 12,519 & 12,519 & 12,011 \\
+ & Faiss centered IP & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & \missing & \missing & \missing & \missing & \missing \\
+\bottomrule
+\end{tabular*}

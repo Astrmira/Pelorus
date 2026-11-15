@@ -1,0 +1,59 @@
+\begin{tabular}{@{}llrrrrrrrrr@{}}
+\multicolumn{11}{@{}l}{\textbf{(a) Single-thread QPS}} \\
+\toprule
+\textbf{Dataset} & \textbf{Method} & \textbf{$M/L_c$} & \textbf{\shortstack{Build\\32T (s)}} & \textbf{\shortstack{Peak\\Rec@10}} & \textbf{$\ge90\%$} & \textbf{$\ge95\%$} & \textbf{$\ge98\%$} & \textbf{$\ge99\%$} & \textbf{$\ge99.5\%$} & \textbf{\shortstack{p99 (ms)\\at $99\%$}} \\
+\midrule
+Cohere-1M & Pelorus & 16/128 & 35.0 & 99.700\% & 4,939 & 4,939 & 2,907 & 1,930 & 738 & 0.62 \\
+ & Faiss centered IP & 32/256 & 167.3 & 98.910\% & 1,652 & 830 & 127 & \missing & \missing & \missing \\
+ & Faiss direction & 16/128 & 77.6 & 65.170\% & \missing & \missing & \missing & \missing & \missing & \missing \\
+ & Faiss raw Lorentz-IP & 16/128 & 7.4 & 0.120\% & \missing & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & 32/256 & 361.7 & 98.690\% & 252 & 238 & 76 & \missing & \missing & \missing \\
+ & HDB FP32 dynamic & 32/256 & 414.8 & 96.780\% & 839 & 290 & \missing & \missing & \missing & \missing \\
+ & HDB FP32 flat & 32/256 & 416.3 & 96.670\% & 946 & 279 & \missing & \missing & \missing & \missing \\
+ & HDB FP64 dynamic & 32/256 & 866.5 & 94.430\% & 67 & \missing & \missing & \missing & \missing & \missing \\
+ & HDB FP64 flat & 32/256 & 869.3 & 94.330\% & 74 & \missing & \missing & \missing & \missing & \missing \\
+ & Exact-RobustPrune & 16/128 & 75.5 & 93.940\% & 629 & \missing & \missing & \missing & \missing & \missing \\
+ & Polar-SQ8 & 16/128 & 66.9 & 99.780\% & 2,428 & 2,428 & 1,887 & 878 & 372 & 1.44 \\
+ & Polar-FP32 & 16/128 & 190.2 & 99.783\% & 1,355 & 1,355 & 1,027 & 448 & 258 & 2.69 \\
+\midrule
+MERU-1M & Pelorus & 16/128 & 25.7 & 99.983\% & 5,846 & 4,521 & 2,547 & 2,547 & 1,669 & 0.50 \\
+ & Faiss centered IP & 32/256 & 99.2 & 99.988\% & 4,312 & 2,800 & 1,903 & 1,059 & 872 & 1.43 \\
+ & Faiss direction & 16/128 & 48.8 & 100.000\% & 3,460 & 1,814 & 1,480 & 1,078 & 1,078 & 1.30 \\
+ & Faiss raw Lorentz-IP & 16/128 & 36.3 & 93.858\% & 841 & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & 32/256 & 271.6 & 99.991\% & 297 & 297 & 297 & 260 & 233 & 5.30 \\
+ & HDB FP32 dynamic & 16/128 & 86.5 & 99.947\% & 3,136 & 2,103 & 1,493 & 1,188 & 875 & 1.27 \\
+ & HDB FP32 flat & 16/128 & 87.6 & 99.947\% & 3,187 & 2,184 & 1,579 & 1,296 & 966 & 1.15 \\
+ & HDB FP64 dynamic & 32/256 & 631.4 & 99.955\% & 615 & 428 & 281 & 196 & 165 & 8.83 \\
+ & HDB FP64 flat & 32/256 & 633.9 & 99.707\% & 480 & 320 & 186 & 93 & 46 & 21.68 \\
+\bottomrule
+\end{tabular}
+\par\vspace{5pt}
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}llrrrrr@{}}
+\multicolumn{7}{@{}l}{\textbf{(b) 24-thread QPS}} \\
+\toprule
+\textbf{Dataset} & \textbf{Method} & \textbf{$\ge90\%$} & \textbf{$\ge95\%$} & \textbf{$\ge98\%$} & \textbf{$\ge99\%$} & \textbf{$\ge99.5\%$} \\
+\midrule
+Cohere-1M & Pelorus & 96,584 & 96,584 & 58,162 & 42,466 & 17,137 \\
+ & Faiss centered IP & 10,717 & 10,717 & 1,660 & \missing & \missing \\
+ & Faiss direction & \missing & \missing & \missing & \missing & \missing \\
+ & Faiss raw Lorentz-IP & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & 1,115 & 1,115 & 999 & \missing & \missing \\
+ & HDB FP32 dynamic & 3,416 & 3,416 & \missing & \missing & \missing \\
+ & HDB FP32 flat & 3,656 & 3,656 & \missing & \missing & \missing \\
+ & HDB FP64 dynamic & \missing & \missing & \missing & \missing & \missing \\
+ & HDB FP64 flat & \missing & \missing & \missing & \missing & \missing \\
+ & Exact-RobustPrune & \missing & \missing & \missing & \missing & \missing \\
+ & Polar-SQ8 & 46,034 & 46,034 & 34,639 & 16,844 & 7,016 \\
+ & Polar-FP32 & 19,932 & 19,932 & 14,925 & 6,735 & 3,937 \\
+\midrule
+MERU-1M & Pelorus & 94,846 & 94,846 & 53,483 & 53,483 & 36,092 \\
+ & Faiss centered IP & 33,189 & 33,189 & 22,488 & 13,005 & 9,349 \\
+ & Faiss direction & 43,798 & 43,798 & 19,883 & 14,967 & 9,866 \\
+ & Faiss raw Lorentz-IP & \missing & \missing & \missing & \missing & \missing \\
+ & Milvus centered IP & 1,208 & 1,208 & 1,208 & 1,130 & 1,088 \\
+ & HDB FP32 dynamic & 30,015 & 30,015 & 18,413 & 13,780 & 11,038 \\
+ & HDB FP32 flat & 26,235 & 26,235 & 19,434 & 15,890 & 11,699 \\
+ & HDB FP64 dynamic & 9,588 & 9,588 & 6,121 & 4,098 & 3,414 \\
+ & HDB FP64 flat & 6,362 & 6,362 & 4,039 & 1,933 & 925 \\
+\bottomrule
+\end{tabular*}

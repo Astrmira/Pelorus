@@ -101,7 +101,7 @@ When scalar parameters $(a_v, \delta_v)$ are further compressed to canonical int
 
 \paragraph{Problem Statement and Discrete Comparison Operators.}
 Given $N$ database points $\mathcal{X} \subset \Bball$ and query $q \in \Bball$, exact top-$k$ retrieval returns $\mathcal{N}_k(q)$ minimizing $d_{\mathbb{B}}(q, v)$, and {ANN} accuracy is evaluated via $\operatorname{Recall@}k = |\widehat{\mathcal{N}}_k(q) \cap \mathcal{N}_k(q)| / k$ against throughput ({QPS}) and p99 latency.
-Quantized proximity-graph construction and search depend not on point-wise metric reconstruction error $|\widehat{P}_{\mathbb{B}} - P_{\mathbb{B}}|$, but on sign preservation of two binary comparison operators~\cite{xiao2026decisions}:
+As established by comparison-decision stability theory for flat quantized search~\cite{xiao2026decisions}, proximity-graph construction and traversal depend not on point-wise metric reconstruction error $|\widehat{P}_{\mathbb{B}} - P_{\mathbb{B}}|$, but on sign preservation of two binary comparison operators:
 \begin{enumerate}
   \item \emph{Shared-query ranking} during beam search: for query $q$ and candidates $x, y \in \mathcal{X}$, deciding the sign of
   \begin{equation}

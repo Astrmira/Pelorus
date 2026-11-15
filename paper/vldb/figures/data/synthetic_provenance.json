@@ -1,0 +1,1875 @@
+{
+  "说明": "四种合成分布的正式实测比较，使用已归档且指纹一致的完整配置点。各线程独立取达到阈值的最大QPS，单线程峰值单列。",
+  "来源": [
+    {
+      "path": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+      "sha256": "47db5abc8ba9d26ff3372174cf6ccf78692b7355b3f009676daabb7df27fa193",
+      "machine": "westc"
+    },
+    {
+      "path": "research\\artifacts\\experiments\\westb_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+      "sha256": "4d029a0ee99843668b68fbc4d528766fbc6db2907dfe5027b850cdf58d3321bc",
+      "machine": "westb"
+    },
+    {
+      "path": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+      "sha256": "d552f9250d279f8bbcf78a4a9dfb26d955479170d32b3b79eaaa0cb8e634ec1c",
+      "machine": "westc"
+    }
+  ],
+  "摘要SHA256": "470ec24c33031c6eb3c44dbec15a733791ad6fee219f3bdfea2e061b3fded23a",
+  "行数": 16,
+  "选点": [
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.9,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.9,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.95,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.95,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.98,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.98,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.99,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.99,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.995,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.995,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.9,
+      "threads": 1,
+      "selected": {
+        "dataset": "uniform_narrow_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 1,
+        "recall": 0.9217,
+        "qps": 18.02646854837868,
+        "p99": 64.448164,
+        "source": "research\\artifacts\\experiments\\westb_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 181,
+        "ef": "4096",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westb"
+      }
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.9,
+      "threads": 24,
+      "selected": {
+        "dataset": "uniform_narrow_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 24,
+        "recall": 0.9217,
+        "qps": 288.2901444155541,
+        "p99": 114.709803,
+        "source": "research\\artifacts\\experiments\\westb_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 200,
+        "ef": "4096",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westb"
+      }
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.95,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.95,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.98,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.98,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.99,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.99,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.995,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.995,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.9,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.9,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.95,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.95,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.98,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.98,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.99,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.99,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.995,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.995,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.9,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.9,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.95,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.95,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.98,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.98,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.99,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.99,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.995,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.995,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.9,
+      "threads": 1,
+      "selected": {
+        "dataset": "uniform_wide_1m",
+        "method": "A1B1C1",
+        "threads": 1,
+        "recall": 0.92225,
+        "qps": 639.2855138480156,
+        "p99": 1.724077,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 287,
+        "ef": "384",
+        "B": "128",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.9,
+      "threads": 24,
+      "selected": {
+        "dataset": "uniform_wide_1m",
+        "method": "A1B1C1",
+        "threads": 24,
+        "recall": 0.96785,
+        "qps": 9363.413711872929,
+        "p99": 2.986025,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 318,
+        "ef": "768",
+        "B": "128",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.95,
+      "threads": 1,
+      "selected": {
+        "dataset": "uniform_wide_1m",
+        "method": "A1B1C1",
+        "threads": 1,
+        "recall": 0.96785,
+        "qps": 396.83882715048236,
+        "p99": 2.808769,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 289,
+        "ef": "768",
+        "B": "128",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.95,
+      "threads": 24,
+      "selected": {
+        "dataset": "uniform_wide_1m",
+        "method": "A1B1C1",
+        "threads": 24,
+        "recall": 0.96785,
+        "qps": 9363.413711872929,
+        "p99": 2.986025,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 318,
+        "ef": "768",
+        "B": "128",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.98,
+      "threads": 1,
+      "selected": {
+        "dataset": "uniform_wide_1m",
+        "method": "A1B1C1",
+        "threads": 1,
+        "recall": 0.98505,
+        "qps": 299.96142014248943,
+        "p99": 3.799971,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 312,
+        "ef": "1536",
+        "B": "128",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.98,
+      "threads": 24,
+      "selected": {
+        "dataset": "uniform_wide_1m",
+        "method": "A1B1C1",
+        "threads": 24,
+        "recall": 0.98505,
+        "qps": 6738.850687950432,
+        "p99": 15.405081,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 322,
+        "ef": "1536",
+        "B": "128",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.99,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.99,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.995,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.995,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.9,
+      "threads": 1,
+      "selected": {
+        "dataset": "uniform_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 1,
+        "recall": 0.91725,
+        "qps": 240.8584545779845,
+        "p99": 5.567703,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 164,
+        "ef": "512",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.9,
+      "threads": 24,
+      "selected": {
+        "dataset": "uniform_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 24,
+        "recall": 0.9471,
+        "qps": 1726.5572706006412,
+        "p99": 29.739498,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 205,
+        "ef": "1024",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.95,
+      "threads": 1,
+      "selected": {
+        "dataset": "uniform_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 1,
+        "recall": 0.95935,
+        "qps": 102.93783367055659,
+        "p99": 11.758036,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 177,
+        "ef": "1536",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.95,
+      "threads": 24,
+      "selected": {
+        "dataset": "uniform_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 24,
+        "recall": 0.95935,
+        "qps": 1071.7396926002282,
+        "p99": 42.621019,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 203,
+        "ef": "1536",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.98,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.98,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.99,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.99,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.995,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.995,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.9,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.9,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.95,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.95,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.98,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.98,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.99,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.99,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.995,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.995,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.9,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.9,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.95,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.95,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.98,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.98,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.99,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.99,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.995,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "uniform_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.995,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.9,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "A1B1C1",
+        "threads": 1,
+        "recall": 0.91255,
+        "qps": 3370.93121237182,
+        "p99": 0.334075,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 381,
+        "ef": "64",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.9,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "A1B1C1",
+        "threads": 24,
+        "recall": 0.95255,
+        "qps": 55230.80364635754,
+        "p99": 0.832936,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 397,
+        "ef": "96",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.95,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "A1B1C1",
+        "threads": 1,
+        "recall": 0.95255,
+        "qps": 2874.679917129653,
+        "p99": 0.402593,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 368,
+        "ef": "96",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.95,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "A1B1C1",
+        "threads": 24,
+        "recall": 0.95255,
+        "qps": 55230.80364635754,
+        "p99": 0.832936,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 397,
+        "ef": "96",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.98,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "A1B1C1",
+        "threads": 1,
+        "recall": 0.98685,
+        "qps": 2092.0435702491804,
+        "p99": 0.543148,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 355,
+        "ef": "192",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.98,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "A1B1C1",
+        "threads": 24,
+        "recall": 0.98685,
+        "qps": 44174.76067185906,
+        "p99": 1.052558,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 404,
+        "ef": "192",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.99,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "A1B1C1",
+        "threads": 1,
+        "recall": 0.99385,
+        "qps": 1840.3941741703127,
+        "p99": 0.667087,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 374,
+        "ef": "256",
+        "B": "128",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.99,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "A1B1C1",
+        "threads": 24,
+        "recall": 0.99385,
+        "qps": 38875.67081525019,
+        "p99": 1.23603,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 394,
+        "ef": "256",
+        "B": "128",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.995,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "A1B1C1",
+        "threads": 1,
+        "recall": 0.998,
+        "qps": 1550.56902128766,
+        "p99": 0.723588,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 358,
+        "ef": "384",
+        "B": "128",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "A1B1C1",
+      "target": 0.995,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "A1B1C1",
+        "threads": 24,
+        "recall": 0.998,
+        "qps": 33132.30758514252,
+        "p99": 1.410344,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 403,
+        "ef": "384",
+        "B": "128",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.9,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 1,
+        "recall": 0.92905,
+        "qps": 1567.6249370052856,
+        "p99": 0.725466,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 57,
+        "ef": "48",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.9,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 24,
+        "recall": 0.96325,
+        "qps": 17023.678368730125,
+        "p99": 1.792519,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 87,
+        "ef": "64",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.95,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 1,
+        "recall": 0.96325,
+        "qps": 1314.5993321411302,
+        "p99": 1.029182,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 56,
+        "ef": "64",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.95,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 24,
+        "recall": 0.96325,
+        "qps": 17023.678368730125,
+        "p99": 1.792519,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 87,
+        "ef": "64",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.98,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 1,
+        "recall": 0.9875,
+        "qps": 1133.4771952110705,
+        "p99": 0.998001,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 49,
+        "ef": "96",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.98,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 24,
+        "recall": 0.9875,
+        "qps": 14482.980109403883,
+        "p99": 2.146349,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 83,
+        "ef": "96",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.99,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 1,
+        "recall": 0.995,
+        "qps": 997.5904127349111,
+        "p99": 1.330728,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 41,
+        "ef": "128",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.99,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 24,
+        "recall": 0.995,
+        "qps": 13311.23460733256,
+        "p99": 2.25105,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 85,
+        "ef": "128",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.995,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 1,
+        "recall": 0.995,
+        "qps": 997.5904127349111,
+        "p99": 1.330728,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 41,
+        "ef": "128",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.995,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_narrow_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 24,
+        "recall": 0.995,
+        "qps": 13311.23460733256,
+        "p99": 2.25105,
+        "source": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 85,
+        "ef": "128",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.9,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.9,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.95,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.95,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.98,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.98,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.99,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.99,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.995,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.995,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.9,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.9,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.95,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.95,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.98,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.98,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.99,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.99,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.995,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_narrow_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.995,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.9,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "A1B1C1",
+        "threads": 1,
+        "recall": 0.9468,
+        "qps": 4113.02089502222,
+        "p99": 0.288515,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 485,
+        "ef": "64",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.9,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "A1B1C1",
+        "threads": 24,
+        "recall": 0.97745,
+        "qps": 72779.58616450168,
+        "p99": 0.699839,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 519,
+        "ef": "96",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.95,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "A1B1C1",
+        "threads": 1,
+        "recall": 0.97745,
+        "qps": 3572.202164977846,
+        "p99": 0.336095,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 480,
+        "ef": "96",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.95,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "A1B1C1",
+        "threads": 24,
+        "recall": 0.97745,
+        "qps": 72779.58616450168,
+        "p99": 0.699839,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 519,
+        "ef": "96",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.98,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "A1B1C1",
+        "threads": 1,
+        "recall": 0.9874,
+        "qps": 3141.160764640288,
+        "p99": 0.396084,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 491,
+        "ef": "128",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.98,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "A1B1C1",
+        "threads": 24,
+        "recall": 0.9874,
+        "qps": 70800.59593428002,
+        "p99": 0.6612,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 523,
+        "ef": "128",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.99,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "A1B1C1",
+        "threads": 1,
+        "recall": 0.99605,
+        "qps": 2703.6475975787184,
+        "p99": 0.439124,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 486,
+        "ef": "192",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.99,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "A1B1C1",
+        "threads": 24,
+        "recall": 0.99605,
+        "qps": 57144.145008616644,
+        "p99": 0.895716,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 518,
+        "ef": "192",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.995,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "A1B1C1",
+        "threads": 1,
+        "recall": 0.99605,
+        "qps": 2703.6475975787184,
+        "p99": 0.439124,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 486,
+        "ef": "192",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "A1B1C1",
+      "target": 0.995,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "A1B1C1",
+        "threads": 24,
+        "recall": 0.99605,
+        "qps": 57144.145008616644,
+        "p99": 0.895716,
+        "source": "research\\artifacts\\experiments\\zen4_a9_followup_v1\\analysis\\parameter_points.csv",
+        "line": 518,
+        "ef": "192",
+        "B": "64",
+        "M": "16",
+        "efConstruction": "128",
+        "machine": "westc"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.9,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 1,
+        "recall": 0.9169,
+        "qps": 1037.2573116581927,
+        "p99": 1.73323,
+        "source": "research\\artifacts\\experiments\\westb_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 41,
+        "ef": "384",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westb"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.9,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 24,
+        "recall": 0.9735,
+        "qps": 15090.049561411708,
+        "p99": 2.586204,
+        "source": "research\\artifacts\\experiments\\westb_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 83,
+        "ef": "512",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westb"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.95,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 1,
+        "recall": 0.9735,
+        "qps": 907.6608146366891,
+        "p99": 1.908402,
+        "source": "research\\artifacts\\experiments\\westb_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 56,
+        "ef": "512",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westb"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.95,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 24,
+        "recall": 0.9735,
+        "qps": 15090.049561411708,
+        "p99": 2.586204,
+        "source": "research\\artifacts\\experiments\\westb_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 83,
+        "ef": "512",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westb"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.98,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 1,
+        "recall": 0.99495,
+        "qps": 734.7749640170596,
+        "p99": 2.138761,
+        "source": "research\\artifacts\\experiments\\westb_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 50,
+        "ef": "768",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westb"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.98,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 24,
+        "recall": 0.99495,
+        "qps": 12518.80869634369,
+        "p99": 2.907544,
+        "source": "research\\artifacts\\experiments\\westb_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 82,
+        "ef": "768",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westb"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.99,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 1,
+        "recall": 0.99495,
+        "qps": 734.7749640170596,
+        "p99": 2.138761,
+        "source": "research\\artifacts\\experiments\\westb_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 50,
+        "ef": "768",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westb"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.99,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 24,
+        "recall": 0.99495,
+        "qps": 12518.80869634369,
+        "p99": 2.907544,
+        "source": "research\\artifacts\\experiments\\westb_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 82,
+        "ef": "768",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westb"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.995,
+      "threads": 1,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 1,
+        "recall": 0.995,
+        "qps": 644.5375890120815,
+        "p99": 2.307591,
+        "source": "research\\artifacts\\experiments\\westb_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 51,
+        "ef": "1024",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westb"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "HDB-FP32-flat",
+      "target": 0.995,
+      "threads": 24,
+      "selected": {
+        "dataset": "clustered_wide_1m",
+        "method": "HDB-FP32-flat",
+        "threads": 24,
+        "recall": 0.995,
+        "qps": 12010.583827357572,
+        "p99": 3.098825,
+        "source": "research\\artifacts\\experiments\\westb_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
+        "line": 86,
+        "ef": "1024",
+        "B": "0",
+        "M": "32",
+        "efConstruction": "256",
+        "machine": "westb"
+      }
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.9,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.9,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.95,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.95,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.98,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.98,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.99,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.99,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.995,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Faiss-centered_ip",
+      "target": 0.995,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.9,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.9,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.95,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.95,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.98,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.98,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.99,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.99,
+      "threads": 24,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.995,
+      "threads": 1,
+      "selected": null
+    },
+    {
+      "dataset": "clustered_wide_1m",
+      "method": "Milvus-Standalone-centered-IP",
+      "target": 0.995,
+      "threads": 24,
+      "selected": null
+    }
+  ],
+  "构图口径": "Pelorus为M16/efConstruction128，三基线为M32/efConstruction256，各构图一次、32线程。",
+  "扫描范围": "Pelorus至2048，外部基线正式ef不超过4096。",
+  "机器分配": "Pelorus和Uniform-Wide/Clustered-Narrow基线在实例一，Uniform-Narrow/Clustered-Wide基线在实例二，两机硬件型号与资源配额相同。"
+}

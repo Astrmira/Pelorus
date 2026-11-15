@@ -77,7 +77,7 @@ Furthermore, using $\sinh\rho_z = \sqrt{c}\,r_z f_z$ and $\cosh\rho_z = f_z - 1 
 where the final equality uses $\sinh^2(t/2) = \frac{1}{2}(\cosh t - 1)$.
 Taking $c \to 0^+$ with fixed $q, v \in \R^D$, $\lim_{c \to 0^+} f_z = 2$, so $\lim_{c \to 0^+} \frac{1}{4}P_{\mathbb{B}}(q, v) = \|q - v\|_2^2$ and $\lim_{c \to 0^+} d_{\mathbb{B}}(q, v) = \|q - v\|_2$. \qed
 
-\subsection{Complete Proof of Proposition~\ref{prop:geodesic_apex} ($1$-Strong Convexity and Clamped Apex)}
+\subsection{Complete Proof of Proposition~\ref{prop:geodesic_apex} (Strong Convexity and Constrained Radial Minimization)}
 \begin{proof}
 For Claim~(1), since $u_q, u_v \in \Sunit$, Cauchy--Schwarz gives $\gamma_{qv} = \langle u_q, u_v\rangle \le 1$.
 Since $W(r_q, r_v) = 2 r_q r_v f_q f_v \ge 0$, $P_{\mathbb{B}}(q, v) = R(r_q, r_v) + W(r_q, r_v)(1 - \gamma_{qv}) \ge R(r_q, r_v) = P_{\mathrm{rad}}(r_q, r_v)$, with equality at $u_v = u_q$, where $d_{\mathbb{B}}(q, v) = |\rho_q - \rho_v|/\sqrt{c}$ yields $P_{\mathrm{rad}}(r_q, r_v) = \frac{2}{c}(\cosh|\rho_q - \rho_v| - 1)$.
@@ -152,22 +152,28 @@ Checking all $8$ combinations $(A_i, B_i, C_i) \in \{0, 1\}^3$:
 for weight $0$, $(0, 0) \mapsto 0$; for weight $1$, $(\mathrm{Sum}_i, \mathrm{Carry}_i) = (1, 0) \mapsto 1$; for weight $2$, $(0, 1) \mapsto 2$; and for weight $3$, $(1, 1) \mapsto 1 + 2 = 3$.
 Summing over $i = 1, \dots, W$ yields $\popcnt(A) + \popcnt(B) + \popcnt(C) = \popcnt(\mathrm{Sum}) + 2\,\popcnt(\mathrm{Carry})$ identically. \qed
 
-\subsection{Three-Subset-Sum Nibble-LUT Identity and Proof of Proposition~\ref{prop:asym_cj_gate}(1)}
-\paragraph{Derivation of~\eqref{eq:asym_subset_sums}.}
-Write each query coordinate as $u_{q,i} = \sigma_{q,i}|u_{q,i}|$ with $\sigma_{q,i} = 2 s_{q,i} - 1 \in \{\pm 1\}$ (where $|0| = 0$ makes sign tie-breaking at zero immaterial).
-With $\bar{x}_i = \mathbb{I}[s_{q,i} = s_{v,i}]$, $\sigma_{q,i}\sigma_{v,i} = 2\bar{x}_i - 1$, so
+\subsection{Three-Subset-Sum Identity, Fixed-Point Overflow Bound, and Proof of Proposition~\ref{prop:asym_cj_gate}(1)}
+\paragraph{Derivation of~\eqref{eq:asym_subset_sums} and Overflow-Free \texttt{i16} Accumulation.}
+Write each candidate sign as $\sigma_{v,i} = 2 s_{v,i} - 1 \in \{\pm 1\}$ with $s_{v,i} \in \{0, 1\}$.
+Expanding $\hat{u}_{v,i} = (2 s_{v,i} - 1)(a_v + \delta_v m_{v,i})$ directly against signed query coordinates $u_{q,i}$ gives
 \begin{align}
   \langle u_q, \hat{u}_v\rangle
-  &= \sum_{i=1}^D |u_{q,i}|(2\bar{x}_i - 1)\bigl(a_v + \delta_v m_{v,i}\bigr) \nonumber \\
-  &= a_v\!\left(2\sum_{i=1}^D |u_{q,i}|\bar{x}_i - \sum_{i=1}^D |u_{q,i}|\right) \nonumber \\
-  &\quad+ \delta_v\!\left(2\sum_{i=1}^D |u_{q,i}|\bar{x}_i m_{v,i} - \sum_{i=1}^D |u_{q,i}|m_{v,i}\right) \nonumber \\
-  &= a_v\bigl(2 S_+ - S_{\mathrm{tot}}\bigr) + \delta_v\bigl(2 S_{+h} - S_h\bigr).
+  &= \sum_{i=1}^D u_{q,i}(2 s_{v,i} - 1)\bigl(a_v + \delta_v m_{v,i}\bigr) \nonumber \\
+  &= a_v\!\left(2\sum_{i=1}^D u_{q,i} s_{v,i} - \sum_{i=1}^D u_{q,i}\right) \nonumber \\
+  &\quad+ \delta_v\!\left(2\sum_{i=1}^D u_{q,i} s_{v,i} m_{v,i} - \sum_{i=1}^D u_{q,i} m_{v,i}\right) \nonumber \\
+  &= a_v\bigl(2 S_+ - S_{\mathrm{tot}}\bigr) + \delta_v\bigl(2 S_{+h} - S_h\bigr),
 \end{align}
-Packing $|u_{q,i}|$ into 8-bit unsigned integers
+and substituting $u_{q,i} = (2 s_{q,i} - 1)|u_{q,i}|$ yields the equivalent unsigned sign-agreement form with $\bar{x}_i = \mathbb{I}[s_{q,i} = s_{v,i}]$.
+When \texttt{AsymQuerySm} encodes $u_q \in \Sunit$ as $q_{\mathrm{i16},i} = \operatorname{round}(8100\,u_{q,i})$ and accumulates up to four $64$-coordinate chunks ($16$ SIMD steps per \texttt{i16} lane) before widening via \texttt{vpmaddwd} to \texttt{i32}, Cauchy--Schwarz bounds every 16-term lane sum by
 \[
-  w_i = \operatorname{round}\!\left(\frac{255\,|u_{q,i}|}{\max_j |u_{q,j}|}\right)
+  \begin{aligned}
+    \sum_{t=1}^{16} |q_{\mathrm{i16},i_t}|
+    &\le 8100\sum_{t=1}^{16} |u_{q,i_t}| + 8 \\
+    &\le 8100\sqrt{16}\,\|u_q\|_2 + 8 \\
+    &= 32{,}408 < 32{,}767 = 2^{15} - 1,
+  \end{aligned}
 \]
-allows every 4-coordinate nibble mask $m \in \{0,\dots,15\}$ to pre-sum $\sum_{t=0}^3 w_{4b+t} m_t \le 1020$ (stored in two bytes or split low/high byte tables), accumulating $(S_+, S_h, S_{+h})$ in L1D via \texttt{vpshufb}+\texttt{vpsadbw}.
+guaranteeing strictly overflow-free \texttt{i16} SIMD accumulation for all unit directions $u_q \in \Sunit$.
 
 \paragraph{Complete Proof of Proposition~\ref{prop:asym_cj_gate}(1).}
 \begin{proof}
@@ -240,7 +246,7 @@ In particular, when $u_x = u_y = u_q$ ($\theta_{qx} = \theta_{qy} = 0$) with $\r
 
 \subsection{Complete Proof of Theorem~\ref{thm:vamana_pathologies}}
 \begin{proof}
-\textbf{Claim (1): Apollonius black-hole occlusion.}
+\textbf{Claim (1): Radial occlusion bound.}
 Let $u, p, v \in \Bball$ have geodesic radii $R_u, R_p, R_v$ from the origin $0$, with $\alpha R_p < R_u$.
 Applying the metric triangle inequality on $(\Bball, d_{\mathbb{B}})$ through $0$ gives two angle-independent bounds valid for \emph{all} spherical directions $u_u, u_p, u_v \in \Sunit$:
 \begin{equation}
@@ -257,7 +263,16 @@ Whenever $R_v \le \frac{R_u - \alpha R_p}{\alpha + 1}$, rearranging $(\alpha + 1
 \end{equation}
 for every $\theta_{pv} \in [0, \pi]$ (attaining worst-case equality on $d_{\mathbb{B}}(p, v) = R_p + R_v$ when $u_v = -u_p$, i.e., $180^\circ$ opposite $p$).
 
-\textbf{Claim (2): Origin potential well and escape cap.}
+To isolate the curvature-specific angular contraction from this generic metric ball, consider any same-shell pair $u, v \in \Bball$ at geodesic radius $R_u = R_v = R > 0$ ($\rho = \sqrt{c}\,R$) and angle $\theta_{uv} \in [0, \pi]$ relative to the origin neighbor $p = 0$ ($R_p = 0 < R/\alpha$).
+Substituting $\rho_u = \rho_v = \rho$ into the warped-product identity $\frac{c}{4}P_{\mathbb{B}}(u, v) = \sinh^2(\frac{\sqrt{c}}{2}d_{\mathbb{B}}(u, v)) = \sinh^2\rho\,\sin^2(\theta_{uv}/2)$ yields $\sinh(\frac{\sqrt{c}}{2}d_{\mathbb{B}}(u, v)) = \sinh\rho\,\sin(\theta_{uv}/2)$.
+Because $d_{\mathbb{B}}(0, v) = R$, the pruning test $\alpha\,d_{\mathbb{B}}(0, v) \le d_{\mathbb{B}}(u, v)$ holds if and only if
+\begin{equation}
+  \sin\!\left(\frac{\theta_{uv}}{2}\right) \ge \frac{\sinh\!\left(\frac{\alpha}{2}\rho\right)}{\sinh\rho}.
+\end{equation}
+In the flat limit $c \to 0^+$, $\sinh(\frac{\alpha}{2}\rho)/\sinh\rho \to \alpha / 2$, keeping the surviving unoccluded cone constant at $\theta_{\mathrm{surv}} = 2\arcsin(\alpha/2) \approx 73.7^\circ$ for $\alpha = 1.2$.
+Under negative curvature $-c < 0$ and $\alpha \in (1, 2)$, $\sinh(\frac{\alpha}{2}\rho)/\sinh\rho \sim e^{-\frac{2-\alpha}{2}\rho}$ decays exponentially with depth $\rho$, shrinking the surviving cone to $23.1^\circ$ at $\rho = 4$ and $10.4^\circ$ at $\rho = 6$.
+
+\textbf{Claim (2): Angular escape condition.}
 Since $\arccosh$ is strictly increasing on $[1, \infty)$ and $d_{\mathbb{B}}(q, 0) = R_q = \rho_q / \sqrt{c}$, we have $d_{\mathbb{B}}(q, v) < d_{\mathbb{B}}(q, 0)$ if and only if
 \begin{equation}
   \begin{gathered}
@@ -289,15 +304,24 @@ Then $\rho_v = \rho_0$ for all $v$, so $|\rho_v - \rho_u| = 0 \le \delta_\rho$ f
 (ii) $\Delta_{\mathrm{stem}}(u, v; w) = 0$ and $\tilde{d}_{\mathrm{eff}}(u, v; w) = \tilde{d}(u, v)$, while as $c \to 0^+$, $\tilde{d}(x, y)/\sqrt{c} \to r_0\|u_x - u_y\|_2 = r_0\sqrt{2\ell_\angle(x, y)}$, so $\ell_\angle(w, v) \le \ell_\angle(u, v)$ becomes redundant under $\alpha > 1$ and both $\operatorname{Dom}_{\mathrm{geo}}$ and isobathic pruning reduce to standard spherical {Vamana}/{\quiver} pruning. \qed
 
 \subsection{Degree-$M_0$ and Reachability Invariant of Chord-Swap Island Repair}
-\begin{proposition}[Chord-Swap Invariant]
+\begin{proposition}[Spanning-Tree Chord-Swap Invariant]
 \label{prop:chord_swap_invariant}
-Suppose the router entry set $\mathcal{E} \subset V$ is non-empty and every sweep $s$ of Lines 12--22 in Algorithm~\ref{alg:compass_build} processes unreachable vertices $u \in V \setminus \mathcal{R}^{(s)}$ sequentially (updating in-degrees $\deg^-(w)$ in place).
-Whenever anchor $p \in \mathcal{R}^{(s)}$ either satisfies $\deg^+(p) < M_0$ or owns at least one outgoing neighbor $w^\star$ with $\deg^-(w^\star) \ge 2$ whose unique path from $\mathcal{E}$ does not traverse $p \to w^\star$, replacing $p \to w^\star$ with $p \to u$ preserves $\deg^+(v) \le M_0$ for all $v \in V$, maintains $\deg^-(w) \ge 1$ for every $w \in \mathcal{R}^{(s)} \setminus \mathcal{E}$, and strictly increases $|\mathcal{R}|$ when $p$ remains reachable.
+Suppose the entry set $\mathcal{E} \subset V$ is non-empty, $(\mathcal{R}, \texttt{parent})$ is initialized by directed {BFS} from $\mathcal{E}$, and Algorithm~\ref{alg:compass_build}'s single repair pass updates edge slots, $\deg^-(\cdot)$, and $\texttt{parent}[\cdot]$ sequentially.
+Whenever an unreachable vertex $u \notin \mathcal{R}$ selects a reachable anchor $p \in \mathcal{R}$ that either satisfies $\deg^+(p) < M_0$ or owns a non-tree chord $p \to w^\star$ with $\texttt{parent}[w^\star] \ne p$ and $\deg^-(w^\star) \ge 2$:
+(i)~all vertices preserve $\deg^+(v) \le M_0$,
+(ii)~every vertex previously having $\deg^-(w) \ge 1$ (including $w^\star$ and $u$) maintains $\deg^-(w) \ge 1$,
+(iii)~zero {BFS} spanning-tree edges in $\{(\texttt{parent}[v], v) : v \in \mathcal{R} \setminus \mathcal{E}\}$ are overwritten, so every vertex in $\mathcal{R}$ remains permanently reachable from $\mathcal{E}$, and
+(iv)~attaching $p \to u$ plus incremental directed {BFS} from $u$ strictly increases $|\mathcal{R}|$ by at least $1$.
+Hence, whenever every remaining island locates a qualifying anchor $p$, the single pass terminates with $100\%$ directed reachability ($|\mathcal{R}| = N$).
 \end{proposition}
 \begin{proof}
-Appending $p \to u$ when $\deg^+(p) < M_0$ increases $\deg^+(p)$ by at most $1$ ($\le M_0$) and deletes no edges, so $\mathcal{R}^{(s)} \cup \{u\} \subseteq \mathcal{R}^{(s+1)}$.
-When $\deg^+(p) = M_0$, replacing $p \to w^\star$ by $p \to u$ leaves $\deg^+(p) = M_0$ unchanged, increments $\deg^-(u)$ from $0$ to $1$, and decrements $\deg^-(w^\star)$ to $\deg^-(w^\star) - 1 \ge 1$.
-Because multi-source {BFS} in sweep $s+1$ recomputes $\mathcal{R}^{(s+1)}$ exactly from $\mathcal{E}$, even if a cycle among non-tree chords temporarily disconnects a descendant, at most $2$--$3$ outer {BFS} sweeps re-anchor any residual component directly to the verified reachable tree.
+Let $T = \{(\texttt{parent}[v], v) : v \in \mathcal{R} \setminus \mathcal{E}\}$ denote the current directed {BFS} spanning tree rooted at $\mathcal{E}$.
+By induction on the {BFS} depth stored in $\texttt{parent}[\cdot]$, every $v \in \mathcal{R}$ retains a directed path from $\mathcal{E}$ inside $T$.
+If $\deg^+(p) < M_0$, appending $p \to u$ preserves $\deg^+(p) \le M_0$, deletes no edges of $G$, and sets $\deg^-(u) \ge 1$.
+If $\deg^+(p) = M_0$, replacing $p \to w^\star$ with $p \to u$ leaves $\deg^+(p) = M_0$ unchanged, raises $\deg^-(u)$ from $0$ to $1$, and decrements $\deg^-(w^\star)$ to $\deg^-(w^\star) - 1 \ge 1$.
+Because the explicit guard $\texttt{parent}[w^\star] \ne p$ ensures $(p, w^\star) \notin T$, $T$ remains an intact subgraph of $G$ and no previously reachable vertex in $\mathcal{R}$ can become disconnected through cycle breakage.
+Since $p \in \mathcal{R}$ stays reachable and $p \to u$ is present, setting $\texttt{parent}[u] = p$ validly extends $T$ to $u$ and, via incremental directed {BFS} from $u$, to every unvisited vertex reachable from $u$, strictly enlarging $|\mathcal{R}|$.
+When every island $u \notin \mathcal{R}$ encountered by the pass obtains a qualifying anchor, no unreachable vertices can remain upon completion.
 \end{proof}
 
 \section{Tangent-Cone Recovery, Pool-Dilution Inversion, Off-Axis CJ-Gate, and Sketch Variance}
@@ -322,7 +346,7 @@ Selecting the smallest $B$ proxy values therefore samples a uniform hypergeometr
       k_{\mathrm{vis}}(L)\cdot \min\!\left(1,\; \frac{B}{N_c(L)}\right).
   \end{aligned}
 \end{equation}
-Once $k_{\mathrm{vis}}(L)$ saturates near $k$ (e.g., $93.9\%$ already visited at $L=256$ on {Clustered-Narrow-1M}) while expanding $L$ from $256$ to $2{,}048$ continues admitting hundreds of additional intra-cone distractors into $N_c(L)$, $B / N_c(L)$ drops sharply, proving non-monotonic recall inversion with respect to $L$ at fixed $B$.
+Once $k_{\mathrm{vis}}(L)$ saturates near $k$ (e.g., $93.9\%$ already visited at $L=256$ on {Clustered-Narrow}) while expanding $L$ from $256$ to $2{,}048$ continues admitting hundreds of additional intra-cone distractors into $N_c(L)$, $B / N_c(L)$ drops sharply, proving non-monotonic recall inversion with respect to $L$ at fixed $B$.
 
 \textbf{Part (3): Local tangent-cone {$\MNR$} recovery.}
 Under~\eqref{eq:cone_estimator}, $\alpha_{q,c} = \langle u_q, \mu_c\rangle$ and $\alpha_v$ are stored/computed in FP32, so $\beta_{q,c} = \sqrt{1 - \alpha_{q,c}^2}$ and $\beta_v = \sqrt{1 - \alpha_v^2}$ are exact up to machine precision ($< 10^{-7}$).
@@ -369,7 +393,7 @@ Hence $G_k(q) \cap (F_B(q) \setminus R_k(q)) = \emptyset$ and $\mathcal{L}_{\mat
 
 \begin{table}[h]
   \centering
-  \caption{Controlled component ablation on {Clustered-Narrow-1M} ($D=512, \rho \in [3.9, 4.1]$, fixed $L=256, B=128$, AMD Zen~4 32T build / 1T search).}
+  \caption{Controlled component ablation on {Clustered-Narrow} ($N=1\text{M}, D=512, \rho \in [3.9, 4.1]$, fixed $L=256, B=128$, AMD Zen~4 32T build / 1T search).}
   \label{tab:app_stage_audit}
   \small
   \setlength{\tabcolsep}{3pt}
@@ -377,16 +401,16 @@ Hence $G_k(q) \cap (F_B(q) \setminus R_k(q)) = \emptyset$ and $\mathcal{L}_{\mat
     \toprule
     \textbf{Configuration} & \textbf{Cones} & \textbf{Build (32T)} & \textbf{Recall@10} & \textbf{1T QPS} \\
     \midrule
-    Unrescued Base (\texttt{A0B0C0}) & 0 & 21.9\,s & 34.22\% & \textbf{2,071} \\
-    \texttt{A}-Only (\textsc{CJ-Gate}) & 0 & 21.9\,s & 50.59\% & 1,884 \\
-    \texttt{C}-Only (Asym Sketch) & 0 & 21.5\,s & 34.22\% & 1,960 \\
-    \texttt{AB} (\texttt{ResidualConeDict}+\textsc{CJ}) & 256 & 25.7\,s & 99.37\% & 1,958 \\
-    \textbf{Full \rquiver{} (\texttt{ABC})} & \textbf{256} & 25.3\,s & \textbf{99.39\%} & 1,840 \\
+    Global-SM (No Rescue) & 0 & 21.9\,s & 34.22\% & \textbf{2,071} \\
+    + \textsc{CJ-Gate} Only & 0 & 21.9\,s & 50.59\% & 1,884 \\
+    + Var.-Stab.\ \texttt{SymSketch256} & 0 & 21.5\,s & 34.22\% & 1,960 \\
+    + \texttt{ResidualConeDict} + \textsc{CJ-Gate} & 256 & 25.7\,s & 99.37\% & 1,958 \\
+    \textbf{\rquiver{}} & \textbf{256} & 25.3\,s & \textbf{99.39\%} & 1,840 \\
     \bottomrule
   \end{tabularx}
 \end{table}
 
-Table~\ref{tab:app_stage_audit} reports the controlled fixed-budget ablation ($L=256, B=128$, independent Zen~4 graph builds per configuration) on {Clustered-Narrow-1M}:
-on the diagnostic subset, unrescued \texttt{A0B0C0} visits $93.9\%$ of true neighbors ($\mathcal{L}_{\mathrm{miss}} = 6.1\%$) yet loses $44.6\%$ inside the bounded $L$-beam ($\mathcal{L}_{\mathrm{beam}}$) and $16.3\%$ at pool gating ($\mathcal{L}_{\mathrm{gate}}$, $33.0\%$ subset / $34.22\%$ full Recall@10);
-expanding rerank plateau budgets alone (\texttt{A}-Only) eliminates $\mathcal{L}_{\mathrm{gate}}$ and lifts full-benchmark recall only from $34.22\%$ to $50.59\%$ because $\mathcal{L}_{\mathrm{beam}} = 44.6\%$ of true neighbors were already evicted from $C_L(q)$ during beam maintenance;
-by contrast, restoring intra-cone {$\MNR$} at the representation level via \texttt{ResidualConeDict} eliminates both $\mathcal{L}_{\mathrm{beam}}$ and $\mathcal{L}_{\mathrm{gate}}$, reaching $99.37\%$ (\texttt{AB}, $1{,}958$\,QPS) and $99.39\%$ Recall@10 under full \rquiver{} (\texttt{ABC}, $1{,}840$\,QPS 1T and $38{,}876$\,QPS 24T, climbing to $99.80\%$ at $L=384, B=128$) with zero per-vertex memory increase.
+Table~\ref{tab:app_stage_audit} reports the controlled fixed-budget ablation ($L=256, B=128$, independent Zen~4 graph builds per configuration) on {Clustered-Narrow}:
+on the diagnostic subset, {Global-SM} traversal without tangent-cone rescue or adaptive gating visits $93.9\%$ of true neighbors ($\mathcal{L}_{\mathrm{reach}} = 6.1\%$) yet loses $44.6\%$ inside the bounded $L$-beam ($\mathcal{L}_{\mathrm{beam}}$) and $16.3\%$ at pool gating ($\mathcal{L}_{\mathrm{gate}}$, $33.0\%$ subset / $34.22\%$ full Recall@10);
+expanding rerank plateau budgets alone (+\,\textsc{CJ-Gate} Only) eliminates $\mathcal{L}_{\mathrm{gate}}$ and lifts full-benchmark recall only from $34.22\%$ to $50.59\%$ because $\mathcal{L}_{\mathrm{beam}} = 44.6\%$ of true neighbors were already evicted from $C_L(q)$ during beam maintenance;
+by contrast, restoring intra-cone {$\MNR$} at the representation level via \texttt{ResidualConeDict} eliminates both $\mathcal{L}_{\mathrm{beam}}$ and $\mathcal{L}_{\mathrm{gate}}$, reaching $99.37\%$ (with \textsc{CJ-Gate}, $1{,}958$\,QPS) and $99.39\%$ Recall@10 under \rquiver{} ($1{,}840$\,QPS 1T and $38{,}876$\,QPS 24T, climbing to $99.80\%$ at $L=384, B=128$) with zero per-vertex memory increase.
