@@ -1,0 +1,96 @@
+{
+  "generated_at": "2026-09-10",
+  "scope": "条件化文本表示、细粒度关系检索、黎曼/双曲 Dense Retrieval 与 ANN",
+  "papers": [
+    {
+      "id": "2502.14734",
+      "title": "Sentence Smith: Controllable Edits for Evaluating Text Embeddings",
+      "local_pdf": "pdf/01_sentence_smith_2502.14734.pdf",
+      "local_text": "notes/01_sentence_smith_2502.14734.txt",
+      "topic": ["关系敏感性", "角色交换", "否定", "困难负例"],
+      "code": "https://github.com/impresso/sentence-smith",
+      "status": "EMNLP 2025"
+    },
+    {
+      "id": "2305.15093",
+      "title": "C-STS: Conditional Semantic Textual Similarity",
+      "local_pdf": "pdf/02_csts_2305.15093.pdf",
+      "local_text": "notes/02_csts_2305.15093.txt",
+      "topic": ["条件化相似度", "多语义侧面"],
+      "code": "https://github.com/princeton-nlp/c-sts",
+      "status": "论文与代码公开"
+    },
+    {
+      "id": "2504.16411",
+      "title": "Out-of-the-Box Conditional Text Embeddings from Large Language Models",
+      "local_pdf": "pdf/03_ponte_2504.16411.pdf",
+      "local_text": "notes/03_ponte_2504.16411.txt",
+      "topic": ["PonTE", "无监督条件化表示", "输入控制"],
+      "code": null,
+      "status": "arXiv 预印本"
+    },
+    {
+      "id": "2503.17279",
+      "title": "CASE: Condition-Aware Sentence Embeddings",
+      "local_pdf": "pdf/04_case_2503.17279.pdf",
+      "local_text": "notes/04_case_2503.17279.txt",
+      "topic": ["条件化表示", "轻量投影", "C-STS"],
+      "code": "https://github.com/LivNLP/CASE",
+      "status": "arXiv 预印本"
+    },
+    {
+      "id": "2602.07739",
+      "title": "HypRAG: Hyperbolic Dense Retrieval for Retrieval Augmented Generation",
+      "local_pdf": "pdf/05_hyprag_2602.07739.pdf",
+      "local_text": "notes/05_hyprag_2602.07739.txt",
+      "topic": ["Lorentz", "双曲 Dense Retrieval", "层级", "ANN"],
+      "code": "https://github.com/Graph-and-Geometric-Learning/HypRAG",
+      "status": "ICML 2026"
+    },
+    {
+      "id": "2606.18406",
+      "title": "CoreMem: Riemannian Retrieval and Fisher-Guided Distillation for Long-Term Memory in Dialogue Agents",
+      "local_pdf": "pdf/06_coremem_2606.18406.pdf",
+      "local_text": "notes/06_coremem_2606.18406.txt",
+      "topic": ["长期记忆", "局部协方差", "黎曼检索", "hubness"],
+      "code": null,
+      "status": "arXiv 预印本，尚未核验代码"
+    },
+    {
+      "id": "iclr-2022-rE3nP5fPGd_",
+      "title": "Graph-based Nearest Neighbor Search in Hyperbolic Spaces",
+      "local_pdf": null,
+      "local_text": "notes/07_hyperbolic_nns_iclr2022.txt",
+      "topic": ["双曲 ANN", "导航图", "近邻搜索"],
+      "code": null,
+      "status": "ICLR 2022；OpenReview PDF 匿名下载返回 403，保存公开全文转录"
+    },
+    {
+      "id": "2407.12883",
+      "title": "BRIGHT: A Realistic and Challenging Benchmark for Reasoning-Intensive Retrieval",
+      "local_pdf": "pdf/08_bright_2407.12883.pdf",
+      "local_text": "notes/08_bright_2407.12883.txt",
+      "topic": ["推理型检索", "评测", "RAG"],
+      "code": "https://github.com/xlang-ai/BRIGHT",
+      "status": "ICLR 2025"
+    },
+    {
+      "id": "2212.09741",
+      "title": "One Embedder, Any Task: Instruction-Finetuned Text Embeddings",
+      "local_pdf": "pdf/09_instructor_2212.09741.pdf",
+      "local_text": "notes/09_instructor_2212.09741.txt",
+      "topic": ["指令化 embedding", "任务条件"],
+      "code": "https://instructor-embedding.github.io/",
+      "status": "Findings of ACL 2023"
+    },
+    {
+      "id": "1705.08039",
+      "title": "Poincare Embeddings for Learning Hierarchical Representations",
+      "local_pdf": "pdf/10_poincare_embeddings_1705.08039.pdf",
+      "local_text": "notes/10_poincare_embeddings_1705.08039.txt",
+      "topic": ["Poincare", "层级表示", "双曲几何基础"],
+      "code": "https://github.com/facebookresearch/poincare-embeddings",
+      "status": "NeurIPS 2017"
+    }
+  ]
+}

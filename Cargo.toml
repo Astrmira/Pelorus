@@ -1,0 +1,80 @@
+[package]
+name = "quiver-ann"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/Astrmira/Pelorus"
+description = "支持余弦与原生双曲几何的两位量化图索引"
+readme = "README.md"
+keywords = ["ann", "vector-search", "hyperbolic", "quantization"]
+categories = ["algorithms", "data-structures"]
+
+[features]
+default = []
+# 表示对照、运行策略切换与计时外诊断。
+research = []
+
+[dependencies]
+bytemuck = { version = "1.25", features = ["derive"] }
+crc32fast = "1.5"
+half = { version = "2.7", features = ["bytemuck"] }
+memmap2 = "0.9"
+rayon = "1.10"
+tempfile = "3.22"
+tracing = "0.1"
+
+[dev-dependencies]
+serde_json = "1"
+criterion = "0.7"
+
+[[bench]]
+name = "search"
+harness = false
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
+
+[[example]]
+name = "benchmark_cohere_geometry"
+path = "research/benchmarks/cohere_geometry.rs"
+required-features = ["research"]
+
+[[example]]
+name = "benchmark_hot_storage"
+path = "research/benchmarks/hot_storage.rs"
+required-features = ["research"]
+
+[[example]]
+name = "benchmark_geometry_sweep"
+path = "research/benchmarks/geometry_sweep.rs"
+required-features = ["research"]
+
+[[example]]
+name = "benchmark_kernel_throughput"
+path = "research/benchmarks/kernel_throughput.rs"
+required-features = ["research"]
+
+[[example]]
+name = "benchmark_hyperbolic_navigation"
+path = "research/benchmarks/hyperbolic_navigation.rs"
+required-features = ["research"]
+
+[[example]]
+name = "benchmark_geometry_components"
+path = "research/benchmarks/geometry_components.rs"
+required-features = ["research"]
+
+[[example]]
+name = "benchmark_controlled_geometry"
+path = "research/benchmarks/controlled_geometry.rs"
+required-features = ["research"]
+
+[[example]]
+name = "benchmark_execution_strategies"
+path = "research/benchmarks/execution_strategies.rs"
+required-features = ["research"]
+
+[[example]]
+name = "benchmark_distribution_adaptation"
+path = "research/benchmarks/distribution_adaptation.rs"
+required-features = ["research"]

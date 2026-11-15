@@ -1,0 +1,31 @@
+experiment:
+  seed: 20260912
+  dataset_manifest: data/processed/longmemeval_low_capacity/manifest.json
+  output_dir: artifacts/embeddings/longmemeval_low_capacity/validation
+inputs:
+  documents: data/processed/longmemeval_low_capacity/validation_documents.jsonl
+  queries: data/processed/longmemeval_low_capacity/validation_queries.jsonl
+embedding:
+  provider: openai_compatible
+  base_url_env: EMBEDDING_API_BASE_URL
+  api_key_env: EMBEDDING_API_KEY
+  model: Qwen3-Embedding-8B
+  endpoint: /embeddings
+  dimensions: 1536
+  normalize_embeddings: true
+  batch_size: 16
+  max_batch_tokens: 8192
+  requests_per_minute: 8
+  user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36
+retry:
+  max_attempts: 6
+  backoff_base_seconds: 2.0
+  backoff_max_seconds: 90.0
+cache:
+  document_cache: artifacts/embeddings/longmemeval_low_capacity/validation/cache_documents.jsonl
+  query_cache: artifacts/embeddings/longmemeval_low_capacity/validation/cache_queries.jsonl
+  document_vectors: artifacts/embeddings/longmemeval_low_capacity/validation/documents.npy
+  query_vectors: artifacts/embeddings/longmemeval_low_capacity/validation/queries.npy
+  document_ids: artifacts/embeddings/longmemeval_low_capacity/validation/document_ids.json
+  query_ids: artifacts/embeddings/longmemeval_low_capacity/validation/query_ids.json
+  runtime_manifest: artifacts/embeddings/longmemeval_low_capacity/validation/runtime_manifest.json

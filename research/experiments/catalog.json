@@ -1,0 +1,308 @@
+{
+  "schema_version": 1,
+  "path_base": "research/experiments",
+  "experiments": [
+    {
+      "id": "date_counterfactual_v1",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/date_counterfactual_v1",
+      "materials": [
+        "completion_verification.json"
+      ]
+    },
+    {
+      "id": "geometry_confirmatory_v1",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/geometry_confirmatory_v1",
+      "materials": []
+    },
+    {
+      "id": "geometry_confirmatory_v2",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/geometry_confirmatory_v2",
+      "materials": []
+    },
+    {
+      "id": "geometry_controlled_v2",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/geometry_controlled_v2",
+      "materials": []
+    },
+    {
+      "id": "geometry_synthetic_v1",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/geometry_synthetic_v1",
+      "materials": []
+    },
+    {
+      "id": "local_rescue_converged_v3",
+      "category": "ann_development",
+      "description": "历史ANN开发与验证材料",
+      "path": "../artifacts/experiments/local_rescue_converged_v3",
+      "materials": []
+    },
+    {
+      "id": "local_rescue_verify_v2",
+      "category": "ann_development",
+      "description": "历史ANN开发与验证材料",
+      "path": "../artifacts/experiments/local_rescue_verify_v2",
+      "materials": [
+        "matrix.json",
+        "analysis"
+      ]
+    },
+    {
+      "id": "local_synthetic_rescue_v1",
+      "category": "ann_development",
+      "description": "历史ANN开发与验证材料",
+      "path": "../artifacts/experiments/local_synthetic_rescue_v1",
+      "materials": []
+    },
+    {
+      "id": "low_capacity_readout",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/low_capacity_readout",
+      "materials": []
+    },
+    {
+      "id": "low_capacity_readout_v2_residual",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/low_capacity_readout_v2_residual",
+      "materials": []
+    },
+    {
+      "id": "low_capacity_readout_v3_bounded_residual",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/low_capacity_readout_v3_bounded_residual",
+      "materials": []
+    },
+    {
+      "id": "mesh_intent_geometry_v1",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/mesh_intent_geometry_v1",
+      "materials": []
+    },
+    {
+      "id": "methodology_retest_v4",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/methodology_retest_v4",
+      "materials": []
+    },
+    {
+      "id": "pubmed_geometry_v1",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/pubmed_geometry_v1",
+      "materials": [
+        "completion_verification.json"
+      ]
+    },
+    {
+      "id": "pubmed_readout_diagnostics_v1",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/pubmed_readout_diagnostics_v1",
+      "materials": [
+        "completion_verification.json"
+      ]
+    },
+    {
+      "id": "quiver_cohere_geometry_bq2_16k_v1",
+      "category": "ann_development",
+      "description": "历史ANN开发与验证材料",
+      "path": "../artifacts/experiments/quiver_cohere_geometry_bq2_16k_v1",
+      "materials": []
+    },
+    {
+      "id": "quiver_cohere_geometry_bq2_high_recall_v1",
+      "category": "ann_development",
+      "description": "历史ANN开发与验证材料",
+      "path": "../artifacts/experiments/quiver_cohere_geometry_bq2_high_recall_v1",
+      "materials": []
+    },
+    {
+      "id": "quiver_cohere_geometry_bq2_v1",
+      "category": "ann_development",
+      "description": "历史ANN开发与验证材料",
+      "path": "../artifacts/experiments/quiver_cohere_geometry_bq2_v1",
+      "materials": [
+        "completion_verification.json"
+      ]
+    },
+    {
+      "id": "quiver_colocated_early_v1",
+      "category": "ann_development",
+      "description": "历史ANN开发与验证材料",
+      "path": "../artifacts/experiments/quiver_colocated_early_v1",
+      "materials": [
+        "analysis"
+      ]
+    },
+    {
+      "id": "quiver_followup_v2",
+      "category": "ann_development",
+      "description": "历史ANN开发与验证材料",
+      "path": "../artifacts/experiments/quiver_followup_v2",
+      "materials": [
+        "source_manifest.json"
+      ]
+    },
+    {
+      "id": "quiver_native_poincare_parallel_v2",
+      "category": "ann_development",
+      "description": "历史ANN开发与验证材料",
+      "path": "../artifacts/experiments/quiver_native_poincare_parallel_v2",
+      "materials": [
+        "completion_verification.json"
+      ]
+    },
+    {
+      "id": "quiver_native_poincare_v1",
+      "category": "ann_development",
+      "description": "历史ANN开发与验证材料",
+      "path": "../artifacts/experiments/quiver_native_poincare_v1",
+      "materials": []
+    },
+    {
+      "id": "quiver_native_thread_diagnostics_v1",
+      "category": "ann_development",
+      "description": "历史ANN开发与验证材料",
+      "path": "../artifacts/experiments/quiver_native_thread_diagnostics_v1",
+      "materials": [
+        "completion_verification.json"
+      ]
+    },
+    {
+      "id": "quiver_rigorous_a8_v1",
+      "category": "ann_development",
+      "description": "历史ANN开发与验证材料",
+      "path": "../artifacts/experiments/quiver_rigorous_a8_v1",
+      "materials": []
+    },
+    {
+      "id": "quiver_speed_ablation_v1",
+      "category": "ann_development",
+      "description": "历史ANN开发与验证材料",
+      "path": "../artifacts/experiments/quiver_speed_ablation_v1",
+      "materials": [
+        "analysis"
+      ]
+    },
+    {
+      "id": "temporal_fresh_test_v1",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/temporal_fresh_test_v1",
+      "materials": []
+    },
+    {
+      "id": "temporal_geometry_current_backend_v1",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/temporal_geometry_current_backend_v1",
+      "materials": []
+    },
+    {
+      "id": "temporal_geometry_development_v1",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/temporal_geometry_development_v1",
+      "materials": []
+    },
+    {
+      "id": "temporal_readout_v1",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/temporal_readout_v1",
+      "materials": []
+    },
+    {
+      "id": "temporal_readout_v2",
+      "category": "representation_readout",
+      "description": "早期表示读出与受控几何实验",
+      "path": "../artifacts/experiments/temporal_readout_v2",
+      "materials": []
+    },
+    {
+      "id": "westb_extreme_v1",
+      "category": "distribution_baselines",
+      "description": "Uniform-Narrow与Clustered-Wide分片",
+      "path": "../artifacts/experiments/westb_extreme_v1",
+      "materials": [
+        "measurement_manifest.json",
+        "matrix.json",
+        "assignment.json",
+        "protocol_limits.json"
+      ]
+    },
+    {
+      "id": "westb_systems_v1",
+      "category": "system_baselines",
+      "description": "实例二原阶段系统测量的本地记录",
+      "path": "../artifacts/experiments/westb_systems_v1",
+      "materials": []
+    },
+    {
+      "id": "westc_extreme_v1",
+      "category": "distribution_baselines",
+      "description": "Uniform-Wide与Clustered-Narrow分片",
+      "path": "../artifacts/experiments/westc_extreme_v1",
+      "materials": [
+        "measurement_manifest.json",
+        "matrix.json",
+        "assignment.json",
+        "protocol_limits.json"
+      ]
+    },
+    {
+      "id": "zen4_a9_followup_v1",
+      "category": "component_study",
+      "description": "七数据集新增组件与共同参数网格",
+      "path": "../artifacts/experiments/zen4_a9_followup_v1",
+      "materials": [
+        "source_manifest.json",
+        "deployment_manifest.json",
+        "matrix.json",
+        "completion_verification.json",
+        "archive_manifest.json",
+        "analysis"
+      ]
+    },
+    {
+      "id": "zen4_full_matrix_v1",
+      "category": "main_matrix",
+      "description": "冻结主矩阵与原有消融",
+      "path": "../artifacts/experiments/zen4_full_matrix_v1",
+      "materials": [
+        "source_manifest.json",
+        "matrix.json",
+        "analysis"
+      ]
+    },
+    {
+      "id": "zen4_wordnet_v1",
+      "category": "additional_dataset",
+      "description": "WordNet公开嵌入测量",
+      "path": "../artifacts/experiments/zen4_wordnet_v1",
+      "materials": [
+        "source_manifest.json",
+        "measurement_manifest.json",
+        "source_provenance.json",
+        "matrix.json",
+        "completion_verification.json",
+        "archive_manifest.json",
+        "analysis"
+      ]
+    }
+  ]
+}

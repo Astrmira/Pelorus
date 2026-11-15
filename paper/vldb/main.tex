@@ -1,0 +1,137 @@
+% PVLDB 论文主文件：基于官方 acmart (sigconf, nonacm) 模板构建
+% 注意：acmart 已内置加载 newtxmath、xcolor 与 hyperref，请勿重复加载 amssymb 以免 \Bbbk 冲突
+
+\documentclass[sigconf, nonacm]{acmart}
+
+\usepackage{amsmath,amsthm}
+\usepackage{booktabs,array,multirow,tabularx}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{subcaption}
+\usepackage{microtype}
+
+% 定理、引理、命题与定义环境
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+
+% 排版容差控制，防止双栏窄行公式或长术语溢出
+\tolerance=1500
+\emergencystretch=2em
+\widowpenalty=10000
+\clubpenalty=10000
+\graphicspath{{figures/}}
+
+% 版本编译开关：
+% 1. \preprinttrue 生成带完整数学推导与补充分析附录的本地/arXiv预印本版本；
+%    投稿严格无附录的 PVLDB 正文版本时，只需改为 \preprintfalse 即可一键剥离附录及所有附录引用。
+\newif\ifpreprint
+\preprinttrue
+
+% 2. 待填实验单元格宏：遵循学术成稿规范使用标准破折号占位，待云端外部基线跑完后直接填入实测数值
+\newcommand{\emptycell}{\textemdash}
+
+% 常用数学符号与系统名称宏定义
+\newcommand{\rquiver}{Pelorus}
+\newcommand{\pelorus}{Pelorus}
+\newcommand{\quiver}{QuIVer}
+\newcommand{\Bball}{\mathbb{B}_c^D}
+\newcommand{\Bunit}{\mathbb{B}_1^D}
+\newcommand{\Lmod}{\mathbb{L}_c^D}
+\newcommand{\Sunit}{\mathbb{S}^{D-1}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\Cov}{\operatorname{Cov}}
+\newcommand{\MNR}{\mathrm{MNR}}
+\newcommand{\sgn}{\operatorname{sgn}}
+\newcommand{\arccosh}{\operatorname{arccosh}}
+\newcommand{\atanh}{\operatorname{atanh}}
+\newcommand{\asinh}{\operatorname{asinh}}
+\newcommand{\popcnt}{\operatorname{popcnt}}
+\newcommand{\missing}{\textemdash}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+% PVLDB 元数据配置（投稿阶段保留官方占位符，录用后替换为正式卷期页码）
+\newcommand\vldbdoi{XX.XX/XXX.XX}
+\newcommand\vldbpages{XXX-XXX}
+\newcommand\vldbvolume{20}
+\newcommand\vldbissue{1}
+\newcommand\vldbyear{2027}
+\newcommand\vldbauthors{\authors}
+\newcommand\vldbtitle{\shorttitle}
+\newcommand\vldbavailabilityurl{https://github.com/YoKONCy/TriviumDB}
+\newcommand\vldbpagestyle{plain}
+
+\begin{document}
+
+\title[Pelorus: Warped-Product Graph Indexing for Hyperbolic Vector Search]{Pelorus: Warped-Product Graph Indexing for Hyperbolic Vector Search}
+
+% 作者与单位信息（双盲投稿编译时可注释作者块并启用 Anonymous Author(s)）
+\author{Wenxuan Xiao}
+\affiliation{%
+  \institution{Astrmira Tech.}
+  \country{China}
+}
+\email{w.xiao@astrmira.com}
+
+\author{Xu Cao}
+\affiliation{%
+  \institution{Astrmira Tech.}
+  \country{China}
+}
+\email{x.cao@astrmira.com}
+
+\begin{abstract}
+\input{sections/abstract}
+\end{abstract}
+
+\maketitle
+
+% PVLDB 官方格式声明块（请勿修改内部排版宏）
+\pagestyle{\vldbpagestyle}
+\begingroup\small\noindent\raggedright\textbf{PVLDB Reference Format:}\\
+\vldbauthors. \vldbtitle. PVLDB, \vldbvolume(\vldbissue): \vldbpages, \vldbyear.\\
+\href{https://doi.org/\vldbdoi}{doi:\vldbdoi}
+\endgroup
+\begingroup
+\renewcommand\thefootnote{}\footnote{\noindent
+This work is licensed under the Creative Commons BY-NC-ND 4.0 International License. Visit \url{https://creativecommons.org/licenses/by-nc-nd/4.0/} to view a copy of this license. For any use beyond those covered by this license, obtain permission by emailing \href{mailto:info@vldb.org}{info@vldb.org}. Copyright is held by the owner/author(s). Publication rights licensed to the VLDB Endowment. \\
+\raggedright Proceedings of the VLDB Endowment, Vol. \vldbvolume, No. \vldbissue\ %
+ISSN 2150-8097. \\
+\href{https://doi.org/\vldbdoi}{doi:\vldbdoi} \\
+}\addtocounter{footnote}{-1}\endgroup
+
+\ifdefempty{\vldbavailabilityurl}{}{
+\vspace{.3cm}
+\begingroup\small\noindent\raggedright\textbf{PVLDB Artifact Availability:}\\
+The source code, data, and/or other artifacts have been made available at \url{\vldbavailabilityurl}.
+\endgroup
+}
+
+% 正文各章节模块化引入
+\input{sections/introduction}
+\input{sections/preliminaries}
+\input{sections/theory}
+\input{sections/design}
+\input{sections/system}
+\input{sections/evaluation}
+\input{sections/related}
+\input{sections/conclusion}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+% 预印本完整证明与补充实验附录（设置 \preprintfalse 可在投稿时完全关闭）
+\ifpreprint
+\clearpage
+\appendix
+\input{sections/appendix}
+\fi
+
+\end{document}
+\endinput

@@ -1,0 +1,392 @@
+% 预印本附录：全部核心定理、引理、恒等式的逐步完整数学证明及补充阶段诊断表
+% 注：在 main.tex 中将 \preprinttrue 切换为 \preprintfalse 即可在严格无附录投稿模式下完全移除本文件
+
+\section{Riemannian Geometry, Stereographic Isometry, and Warped-Product Proofs}
+\label{app:warped_product}
+
+\subsection{Algebraic Proof of the Lorentz-to-Poincar\'e Stereographic Isometry}
+Let $z = (z_0, \tilde{z}), z' = (z'_0, \tilde{z}') \in \Lmod$ satisfy the upper-sheet hyperboloid constraint $-z_0^2 + \|\tilde{z}\|_2^2 = -1/c$ with $z_0 > 0$, so $c\|\tilde{z}\|_2^2 = c z_0^2 - 1$.
+For $x = \Pi(z) = \frac{\tilde{z}}{1 + \sqrt{c}\,z_0}$, we first verify $x \in \Bball$:
+\begin{equation}
+  \begin{aligned}
+    1 - c\|x\|_2^2
+    &= 1 - \frac{c\|\tilde{z}\|_2^2}{(1 + \sqrt{c}\,z_0)^2} \\
+    &= 1 - \frac{c z_0^2 - 1}{(1 + \sqrt{c}\,z_0)^2} \\
+    &= \frac{2(1 + \sqrt{c}\,z_0)}{(1 + \sqrt{c}\,z_0)^2} \\
+    &= \frac{2}{1 + \sqrt{c}\,z_0} > 0,
+  \end{aligned}
+  \label{eq:app_conformal_lorentz}
+\end{equation}
+which simultaneously yields the exact conformal factor identity $f_{\Pi(z)} = \frac{2}{1 - c\|\Pi(z)\|_2^2} = 1 + \sqrt{c}\,z_0$.
+Next, denote the scaled {Lorentz} inner product by $L(z, z') \triangleq c(z_0 z'_0 - \langle \tilde{z}, \tilde{z}'\rangle) \ge 1$.
+Expanding $\|x - x'\|_2^2$ for $x = \frac{\tilde{z}}{f_x}$ and $x' = \frac{\tilde{z}'}{f_{x'}}$ where $f_x = 1 + \sqrt{c}\,z_0$ and $f_{x'} = 1 + \sqrt{c}\,z'_0$:
+\begin{equation}
+  \begin{aligned}
+    &c f_x f_{x'}\|x - x'\|_2^2 \\
+    &= \frac{c\|\tilde{z}\|_2^2 f_{x'}}{f_x} + \frac{c\|\tilde{z}'\|_2^2 f_x}{f_{x'}}
+      - 2c\langle \tilde{z}, \tilde{z}'\rangle \\
+    &= (\sqrt{c}\,z_0 - 1)(1 + \sqrt{c}\,z'_0) \\
+    &\quad+ (\sqrt{c}\,z'_0 - 1)(1 + \sqrt{c}\,z_0)
+      - 2c\langle \tilde{z}, \tilde{z}'\rangle \\
+    &= 2\bigl(c z_0 z'_0 - 1 - c\langle \tilde{z}, \tilde{z}'\rangle\bigr) \\
+    &= 2\bigl(L(z, z') - 1\bigr).
+  \end{aligned}
+\end{equation}
+Substituting $f_x f_{x'} = \frac{4}{(1 - c\|x\|_2^2)(1 - c\|x'\|_2^2)}$ gives
+\begin{equation}
+  1 + \frac{2c\|x - x'\|_2^2}{(1 - c\|x\|_2^2)(1 - c\|x'\|_2^2)}
+  = 1 + \frac{c}{2} f_x f_{x'}\|x - x'\|_2^2
+  = L(z, z').
+\end{equation}
+Applying $\frac{1}{\sqrt{c}}\arccosh(\cdot)$ to both sides proves $d_{\mathbb{B}}(\Pi(z), \Pi(z')) = d_{\mathbb{L}}(z, z')$ identically for all $z, z' \in \Lmod$. \qed
+
+\subsection{Warped-Product Metric Tensor, Hyperbolic Law of Cosines, and Flat Limit}
+Write $x = r u \in \Bball \setminus \{0\}$ with $r \in (0, 1/\sqrt{c})$ and $u \in \Sunit$.
+In Euclidean polar coordinates, $\mathrm{d}x^\top \mathrm{d}x = \mathrm{d}r^2 + r^2 \mathrm{d}\Omega_{D-1}^2$.
+From $\rho = \sqrt{c}\,R = 2\atanh(\sqrt{c}\,r)$, we have $\sqrt{c}\,r = \tanh(\frac{\sqrt{c}}{2}R)$, whence
+\begin{equation}
+  \begin{aligned}
+    \mathrm{d}r &= \frac{1}{2}\operatorname{sech}^2\!\left(\frac{\sqrt{c}}{2}R\right)\mathrm{d}R, \\
+    1 - c r^2 &= \operatorname{sech}^2\!\left(\frac{\sqrt{c}}{2}R\right), \\
+    f_x &= \frac{2}{1 - c r^2} = 2\cosh^2\!\left(\frac{\sqrt{c}}{2}R\right).
+  \end{aligned}
+\end{equation}
+Multiplying $\mathrm{d}x^\top \mathrm{d}x$ by $f_x^2$ gives the Riemannian line element:
+\begin{equation}
+  \begin{aligned}
+    \mathrm{d}s^2 &= f_x^2\bigl(\mathrm{d}r^2 + r^2\mathrm{d}\Omega_{D-1}^2\bigr) \\
+    &= \mathrm{d}R^2 + \frac{4}{c}\cosh^4\!\left(\frac{\sqrt{c}}{2}R\right) \\
+    &\quad\times\tanh^2\!\left(\frac{\sqrt{c}}{2}R\right)\mathrm{d}\Omega_{D-1}^2 \\
+    &= \mathrm{d}R^2 + \frac{1}{c}\sinh^2(\sqrt{c}\,R)\,\mathrm{d}\Omega_{D-1}^2,
+  \end{aligned}
+\end{equation}
+establishing~\eqref{eq:warped_metric}.
+Furthermore, using $\sinh\rho_z = \sqrt{c}\,r_z f_z$ and $\cosh\rho_z = f_z - 1 = c r_z^2 f_z + 1$, direct expansion of $\frac{c}{4}P_{\mathbb{B}}(q, v)$ gives
+\begin{equation}
+  \begin{aligned}
+    &\frac{c}{4}P_{\mathbb{B}}(q, v) \\
+    &= \frac{c}{4}(r_q - r_v)^2 f_q f_v
+      + \frac{c}{2}r_q r_v f_q f_v (1 - \cos\theta_{qv}) \\
+    &= \frac{1}{2}\bigl(\cosh\rho_q\cosh\rho_v - \sinh\rho_q\sinh\rho_v - 1\bigr) \\
+    &\quad+ \sinh\rho_q\sinh\rho_v\sin^2\!\left(\frac{\theta_{qv}}{2}\right) \\
+    &= \sinh^2\!\left(\frac{\rho_q - \rho_v}{2}\right)
+      + \sinh\rho_q\sinh\rho_v\sin^2\!\left(\frac{\theta_{qv}}{2}\right) \\
+    &= \sinh^2\!\left(\frac{\sqrt{c}}{2}d_{\mathbb{B}}(q, v)\right),
+  \end{aligned}
+\end{equation}
+where the final equality uses $\sinh^2(t/2) = \frac{1}{2}(\cosh t - 1)$.
+Taking $c \to 0^+$ with fixed $q, v \in \R^D$, $\lim_{c \to 0^+} f_z = 2$, so $\lim_{c \to 0^+} \frac{1}{4}P_{\mathbb{B}}(q, v) = \|q - v\|_2^2$ and $\lim_{c \to 0^+} d_{\mathbb{B}}(q, v) = \|q - v\|_2$. \qed
+
+\subsection{Complete Proof of Proposition~\ref{prop:geodesic_apex} ($1$-Strong Convexity and Clamped Apex)}
+\begin{proof}
+For Claim~(1), since $u_q, u_v \in \Sunit$, Cauchy--Schwarz gives $\gamma_{qv} = \langle u_q, u_v\rangle \le 1$.
+Since $W(r_q, r_v) = 2 r_q r_v f_q f_v \ge 0$, $P_{\mathbb{B}}(q, v) = R(r_q, r_v) + W(r_q, r_v)(1 - \gamma_{qv}) \ge R(r_q, r_v) = P_{\mathrm{rad}}(r_q, r_v)$, with equality at $u_v = u_q$, where $d_{\mathbb{B}}(q, v) = |\rho_q - \rho_v|/\sqrt{c}$ yields $P_{\mathrm{rad}}(r_q, r_v) = \frac{2}{c}(\cosh|\rho_q - \rho_v| - 1)$.
+
+For Claim~(2), consider $g_\gamma(\rho) = \cosh\rho_q\cosh\rho - \gamma\sinh\rho_q\sinh\rho$ for $\rho \in \R$ and $\gamma \in [-1, 1]$.
+Differentiating twice with respect to $\rho$:
+\begin{align}
+  g_\gamma'(\rho) &= \cosh\rho_q\sinh\rho - \gamma\sinh\rho_q\cosh\rho, \\
+  g_\gamma''(\rho) &= \cosh\rho_q\cosh\rho - \gamma\sinh\rho_q\sinh\rho = g_\gamma(\rho).
+\end{align}
+Since $|\gamma| \le 1$ and $\sinh\rho_q \ge 0$, $|\gamma\sinh\rho_q\sinh\rho| \le \sinh\rho_q|\sinh\rho|$, hence for all $\rho \in \R$:
+\begin{equation}
+  \begin{aligned}
+    g_\gamma''(\rho) &= g_\gamma(\rho) \\
+    &\ge \cosh\rho_q\cosh|\rho| - \sinh\rho_q\sinh|\rho| \\
+    &= \cosh(\rho_q - |\rho|) \ge 1 > 0.
+  \end{aligned}
+\end{equation}
+Thus $g_\gamma(\rho)$ is globally $1$-strongly convex on $\R$.
+Evaluating the first-order optimality condition $g_\gamma'(\rho) = 0$ divides by $\cosh\rho_q\cosh\rho \ge 1$ to obtain $\tanh\rho = \gamma\tanh\rho_q \in (-1, 1)$, so the unique unconstrained minimizer on $\R$ is $\rho_{\R}^* = \atanh(\gamma\tanh\rho_q)$.
+Restricting $\rho$ to $[0, \infty)$: if $\gamma \le 0$, $\rho_{\R}^* \le 0$ and $g_\gamma'(\rho) > 0$ for all $\rho > 0$, so the unique minimizer on $[0, \infty)$ is $0 = \atanh(\max(\gamma, 0)\tanh\rho_q)$; if $\gamma > 0$, $\rho_{\R}^* > 0$ lies in the interior.
+Similarly, for any closed interval $[\rho_{\min}, \rho_{\max}] \subset [0, \infty)$, a $1$-strongly convex univariate function decreases strictly on $(-\infty, \rho_{\R}^*)$ and increases strictly on $(\rho_{\R}^*, \infty)$, so its unique minimizer on $[\rho_{\min}, \rho_{\max}]$ is $\min(\max(\rho_{\R}^*, \rho_{\min}), \rho_{\max}) = \rho_{\mathrm{sup}}^*$, which also minimizes $d_{\mathbb{B}}(q, v(\rho)) = \frac{1}{\sqrt{c}}\arccosh(g_\gamma(\rho))$ by strict monotonicity of $\arccosh$ on $[1, \infty)$.
+\end{proof}
+
+\section{Two-Level Spherical SM Algebra, Bitplane Kernels, and Deterministic De-Biasing}
+\label{app:sm_algebra}
+
+\subsection{Complete Proof of Lemma~\ref{lem:sm_pythagorean} (Conditional-Mean Pythagorean Identity)}
+\begin{proof}
+Let $u_v \in \Sunit$ have bitplanes $s_{v,i} = \mathbb{I}[u_{v,i} \ge 0]$ and $m_{v,i} = \mathbb{I}[|u_{v,i}| > \tau_v]$, partitioning $\{1,\dots,D\}$ into $I_{0,v}$ ($|I_{0,v}| = D - s_v$) and $I_{1,v}$ ($|I_{1,v}| = s_v$).
+For any candidate two-level vector $\tilde{u}_i = \sgn(u_{v,i})(a + (b - a)m_{v,i})$ parameterized by $(a, b) \in \R^2$, because $\sgn(u_{v,i})u_{v,i} = |u_{v,i}|$ for every $i$ (including $u_{v,i} = 0$ where $|0| = 0$), the squared Euclidean reconstruction error splits additively across $I_{0,v}$ and $I_{1,v}$:
+\begin{equation}
+  \|u_v - \tilde{u}\|_2^2
+  = \sum_{i \in I_{0,v}}\bigl(|u_{v,i}| - a\bigr)^2 + \sum_{i \in I_{1,v}}\bigl(|u_{v,i}| - b\bigr)^2.
+\end{equation}
+When $0 < s_v < D$, both sums are strictly convex quadratics minimized uniquely at the empirical conditional means $a_v = \frac{1}{D - s_v}\sum_{i \in I_{0,v}} |u_{v,i}|$ and $b_v = \frac{1}{s_v}\sum_{i \in I_{1,v}} |u_{v,i}|$ (and if $s_v = 0$, $I_{1,v} = \emptyset$ and $a_v = \tau_v > 0$; $s_v = D$ is impossible since no finite set can strictly exceed its own arithmetic mean everywhere).
+At $(a_v, b_v)$, setting $\hat{u}_{v,i} = \sgn(u_{v,i})(a_v + \delta_v m_{v,i})$ with $\delta_v = b_v - a_v$ gives:
+\begin{align}
+  \langle u_v, \hat{u}_v\rangle
+  &= \sum_{i \in I_{0,v}} |u_{v,i}| a_v + \sum_{i \in I_{1,v}} |u_{v,i}| b_v
+   = (D - s_v)a_v^2 + s_v b_v^2, \\
+  \|\hat{u}_v\|_2^2
+  &= \sum_{i \in I_{0,v}} a_v^2 + \sum_{i \in I_{1,v}} b_v^2
+   = (D - s_v)a_v^2 + s_v b_v^2 \triangleq \sigma_v^2.
+\end{align}
+Hence $\langle u_v - \hat{u}_v, \hat{u}_v\rangle = \langle u_v, \hat{u}_v\rangle - \|\hat{u}_v\|_2^2 = 0$, and the Pythagorean identity yields
+\begin{equation}
+  \|u_v - \hat{u}_v\|_2^2 = \|u_v\|_2^2 - 2\langle u_v, \hat{u}_v\rangle + \|\hat{u}_v\|_2^2 = 1 - \sigma_v^2 \ge 0,
+\end{equation}
+which implies $\sigma_v^2 \le 1$; meanwhile $\sigma_v^2 \ge \frac{1}{D}(\sum_{i=1}^D |u_{v,i}|)^2 \ge \frac{1}{D}\|u_v\|_2^2 = \frac{1}{D} > 0$.
+
+For the five-popcount bilinear formula, let $\sigma_{q,i} = \sgn(u_{q,i}) \in \{\pm 1\}$, $\sigma_{v,i} = \sgn(u_{v,i}) \in \{\pm 1\}$, and $\bar{x}_i = \mathbb{I}[s_{q,i} = s_{v,i}] \in \{0, 1\}$, so $\sigma_{q,i}\sigma_{v,i} = 2\bar{x}_i - 1$.
+Expanding $\langle \hat{u}_q, \hat{u}_v\rangle = \sum_{i=1}^D (2\bar{x}_i - 1)(a_q + \delta_q m_{q,i})(a_v + \delta_v m_{v,i})$ term by term:
+\begin{equation}
+  \begin{aligned}
+    \sum_{i=1}^D (2\bar{x}_i - 1) &= 2 p_\oplus - D, \\
+    \sum_{i=1}^D (2\bar{x}_i - 1)m_{v,i} &= 2 p_{01} - s_v, \\
+    \sum_{i=1}^D (2\bar{x}_i - 1)m_{q,i} &= 2 p_{10} - s_q, \\
+    \sum_{i=1}^D (2\bar{x}_i - 1)m_{q,i}m_{v,i} &= 2 p_{11} - n_{11},
+  \end{aligned}
+\end{equation}
+proving Lemma~\ref{lem:sm_pythagorean}.
+\end{proof}
+
+\subsection{Bit-by-Bit Proof of the 3-to-2 Carry-Save Adder ({CSA}) Identity}
+For any single bit position $i$ across three binary words $A, B, C \in \{0, 1\}^W$, integer addition of bits $A_i + B_i + C_i \in \{0, 1, 2, 3\}$ equals the two-bit binary representation $\mathrm{Sum}_i + 2\,\mathrm{Carry}_i$, where the full-adder truth table gives
+\begin{equation}
+  \mathrm{Sum}_i = A_i \oplus B_i \oplus C_i, \qquad
+  \mathrm{Carry}_i = (A_i \wedge B_i) \vee \bigl((A_i \oplus B_i) \wedge C_i\bigr).
+\end{equation}
+Checking all $8$ combinations $(A_i, B_i, C_i) \in \{0, 1\}^3$:
+for weight $0$, $(0, 0) \mapsto 0$; for weight $1$, $(\mathrm{Sum}_i, \mathrm{Carry}_i) = (1, 0) \mapsto 1$; for weight $2$, $(0, 1) \mapsto 2$; and for weight $3$, $(1, 1) \mapsto 1 + 2 = 3$.
+Summing over $i = 1, \dots, W$ yields $\popcnt(A) + \popcnt(B) + \popcnt(C) = \popcnt(\mathrm{Sum}) + 2\,\popcnt(\mathrm{Carry})$ identically. \qed
+
+\subsection{Three-Subset-Sum Nibble-LUT Identity and Proof of Proposition~\ref{prop:asym_cj_gate}(1)}
+\paragraph{Derivation of~\eqref{eq:asym_subset_sums}.}
+Write each query coordinate as $u_{q,i} = \sigma_{q,i}|u_{q,i}|$ with $\sigma_{q,i} = 2 s_{q,i} - 1 \in \{\pm 1\}$ (where $|0| = 0$ makes sign tie-breaking at zero immaterial).
+With $\bar{x}_i = \mathbb{I}[s_{q,i} = s_{v,i}]$, $\sigma_{q,i}\sigma_{v,i} = 2\bar{x}_i - 1$, so
+\begin{align}
+  \langle u_q, \hat{u}_v\rangle
+  &= \sum_{i=1}^D |u_{q,i}|(2\bar{x}_i - 1)\bigl(a_v + \delta_v m_{v,i}\bigr) \nonumber \\
+  &= a_v\!\left(2\sum_{i=1}^D |u_{q,i}|\bar{x}_i - \sum_{i=1}^D |u_{q,i}|\right) \nonumber \\
+  &\quad+ \delta_v\!\left(2\sum_{i=1}^D |u_{q,i}|\bar{x}_i m_{v,i} - \sum_{i=1}^D |u_{q,i}|m_{v,i}\right) \nonumber \\
+  &= a_v\bigl(2 S_+ - S_{\mathrm{tot}}\bigr) + \delta_v\bigl(2 S_{+h} - S_h\bigr).
+\end{align}
+Packing $|u_{q,i}|$ into 8-bit unsigned integers
+\[
+  w_i = \operatorname{round}\!\left(\frac{255\,|u_{q,i}|}{\max_j |u_{q,j}|}\right)
+\]
+allows every 4-coordinate nibble mask $m \in \{0,\dots,15\}$ to pre-sum $\sum_{t=0}^3 w_{4b+t} m_t \le 1020$ (stored in two bytes or split low/high byte tables), accumulating $(S_+, S_h, S_{+h})$ in L1D via \texttt{vpshufb}+\texttt{vpsadbw}.
+
+\paragraph{Complete Proof of Proposition~\ref{prop:asym_cj_gate}(1).}
+\begin{proof}
+Let $u_q, u_v \in \Sunit$ be arbitrary deterministic unit vectors with $\gamma_{qv} = \langle u_q, u_v\rangle$.
+Define $w \triangleq u_q - \gamma_{qv} u_v$; then $\langle w, u_v\rangle = \langle u_q, u_v\rangle - \gamma_{qv}\|u_v\|_2^2 = 0$ and $\|w\|_2^2 = 1 - \gamma_{qv}^2$.
+Taking the inner product of $u_q = \gamma_{qv} u_v + w$ with $\hat{u}_v$ and applying $\langle u_v, \hat{u}_v\rangle = \sigma_v^2 > 0$ from Lemma~\ref{lem:sm_pythagorean}:
+\begin{equation}
+  \langle u_q, \hat{u}_v\rangle
+  = \gamma_{qv}\langle u_v, \hat{u}_v\rangle + \langle w, \hat{u}_v\rangle
+  = \gamma_{qv}\sigma_v^2 + \langle w, \hat{u}_v - \sigma_v^2 u_v\rangle,
+\end{equation}
+where the last step uses $\langle w, u_v\rangle = 0$.
+Dividing both sides by $\sigma_v^2$ yields~\eqref{eq:orth_proj_asym} deterministically for every pair $(u_q, u_v)$ without invoking any distributional or rotational-symmetry hypothesis.
+In particular, along $u_q = \pm u_v$ ($w = 0$), $\langle \pm u_v, \hat{u}_v\rangle / \sigma_v^2 = \pm 1$ is exact, whereas standard cosine normalization $\langle \pm u_v, \hat{u}_v\rangle / \sigma_v = \pm \sigma_v$ suffers deterministic multiplicative shrinkage $1 - \sigma_v > 0$.
+\end{proof}
+
+\section{Conformal Comparison Flip Theory and Suboptimality of Direct Lorentz-MIPS Quantization}
+\label{app:conformal_flips}
+
+\begin{proof}[Complete Proof of Theorem~\ref{thm:conformal_flip}]
+\textbf{Part (1): Exact flip criterion and depth invariance.}
+For any $v \in \Bball$, since $(r_q, f_q, r_v, f_v)$ are stored without quantization error, $R(r_q, r_v)$ and $W(r_q, r_v) = 2 r_q r_v f_q f_v$ are exact, so
+\begin{equation}
+  \begin{aligned}
+    &\widehat{P}_{\mathbb{B}}(q, v) - P_{\mathbb{B}}(q, v) \\
+    &= W(r_q, r_v)\bigl(\gamma_{qv} - \hat{\gamma}(u_q, u_v)\bigr) \\
+    &= -2 r_q f_q r_v f_v\,\varepsilon_\angle(q, v).
+  \end{aligned}
+\end{equation}
+Given $P_{\mathbb{B}}(q, x) < P_{\mathbb{B}}(q, y)$ with $\Delta_P(q; x, y) = P_{\mathbb{B}}(q, y) - P_{\mathbb{B}}(q, x) > 0$, a ranking flip $\widehat{P}_{\mathbb{B}}(q, y) \le \widehat{P}_{\mathbb{B}}(q, x)$ holds if and only if
+\begin{equation}
+  \begin{aligned}
+    &\Delta_P(q; x, y) + \bigl(\widehat{P}_{\mathbb{B}}(q, y) - P_{\mathbb{B}}(q, y)\bigr) \\
+    &\qquad- \bigl(\widehat{P}_{\mathbb{B}}(q, x) - P_{\mathbb{B}}(q, x)\bigr) \le 0 \\
+    &\iff 2 r_q f_q\bigl(r_y f_y\,\varepsilon_\angle(q, y)
+      - r_x f_x\,\varepsilon_\angle(q, x)\bigr) \\
+    &\qquad\ge \Delta_P(q; x, y).
+  \end{aligned}
+\end{equation}
+Since $r_q > 0$ implies $2 r_q f_q > 0$, dividing by $2 r_q f_q$ yields~\eqref{eq:exact_flip_criterion}.
+Notice that $\frac{\Delta_P(q; x, y)}{2 r_q f_q} = \frac{(r_q - r_y)^2 f_y - (r_q - r_x)^2 f_x}{2 r_q} + r_y f_y(1 - \gamma_{qy}) - r_x f_x(1 - \gamma_{qx})$ remains completely bounded as $r_q \to 1/\sqrt{c}$ ($f_q \to \infty$ cancels out of both numerator and denominator).
+Furthermore, on an isobathic shell $r_x = r_y = r > 0$ ($f_x = f_y = f$), $R(r_q, r_y) = R(r_q, r_x)$ cancels in $\Delta_P$, leaving $\Delta_P(q; x, y) = 2 r_q f_q r f (\gamma_{qx} - \gamma_{qy})$; dividing~\eqref{eq:exact_flip_criterion} by $r f > 0$ yields $\varepsilon_\angle(q, y) - \varepsilon_\angle(q, x) \ge \gamma_{qx} - \gamma_{qy}$, which is independent of both $f_q$ and $f$.
+
+\textbf{Part (2): Cross-shell query-noise non-cancellation.}
+Substituting $\varepsilon_\angle(q, v) = \eta_q(u_v) + \eta_v(u_q) + \xi_{qv}$ into $\Delta\widehat{\Psi}_{\mathrm{rank}}(q; x, y) = (\widehat{P}_{\mathbb{B}}(q, x) - P_{\mathbb{B}}(q, x)) - (\widehat{P}_{\mathbb{B}}(q, y) - P_{\mathbb{B}}(q, y))$ and writing $W_v = W(r_q, r_v)$:
+\begin{equation}
+  \begin{aligned}
+    &\Delta\widehat{\Psi}_{\mathrm{rank}}(q; x, y) \\
+    &= W_y\eta_q(u_y) - W_x\eta_q(u_x) \\
+    &\quad+ \bigl(W_y\eta_y(u_q) - W_x\eta_x(u_q)\bigr) \\
+    &\quad+ \bigl(W_y\xi_{qy} - W_x\xi_{qx}\bigr) \\
+    &= (W_y - W_x)\eta_q(u_x) + W_y\langle e_q, u_y - u_x\rangle \\
+    &\quad+ \bigl(W_y\eta_y(u_q) - W_x\eta_x(u_q)\bigr) \\
+    &\quad+ \bigl(W_y\xi_{qy} - W_x\xi_{qx}\bigr).
+  \end{aligned}
+\end{equation}
+At $u_x = u_y$, $\langle e_q, u_y - u_x\rangle = 0$.
+Under $\Cov(e_q) = \frac{\kappa_q}{D}(I_D - u_q u_q^\top)$, $\Var_{e_q}(\eta_q(u_x)) = u_x^\top \Cov(e_q) u_x = \frac{\kappa_q}{D}(1 - \gamma_{qx}^2)$; substituting $W_y - W_x = \frac{2}{c}\sinh\rho_q(\sinh\rho_y - \sinh\rho_x)$ proves~\eqref{eq:cross_shell_var}.
+When $|\rho_y - \rho_x| \le \delta_\rho$, $|\sinh\rho_y - \sinh\rho_x| = 2\sinh\frac{|\rho_y - \rho_x|}{2}\cosh\frac{\rho_y + \rho_x}{2} = O(\delta_\rho\cosh\rho_x)$, bounding $(W_y - W_x)^2 = O(\delta_\rho^2 W_x^2)$.
+When $e_q = 0$, $\eta_q \equiv 0$ and $\xi_{qv} \equiv 0$ for all $(r_x, r_y)$.
+
+\textbf{Part (3): Direct $(D+1)$-D {Lorentz}-MIPS suboptimality.}
+On $\Lmod$, $z = (\frac{1}{\sqrt{c}}\cosh\rho_z, \frac{1}{\sqrt{c}}\sinh\rho_z\,u_z)$.
+If $\tilde{z}_v = \frac{1}{\sqrt{c}}\sinh\rho_v\,u_v \in \R^D$ is quantized directly by a coordinate quantizer $\hat{\tilde{z}}_v = \tilde{z}_v + \epsilon_v$ without factoring out $\|\tilde{z}_v\|_2 = \frac{1}{\sqrt{c}}\sinh\rho_v$, the quantization scale is proportional to $\|\tilde{z}_v\|_2$, giving $\Var(\langle \tilde{z}_q, \epsilon_v\rangle) = \Theta(\frac{1}{D}\|\tilde{z}_q\|_2^2 \|\tilde{z}_v\|_2^2) = \Theta(\frac{1}{c^2 D}\sinh^2\rho_q\sinh^2\rho_v)$.
+In particular, when $u_x = u_y = u_q$ ($\theta_{qx} = \theta_{qy} = 0$) with $\rho_x \ne \rho_y$, polar decoupling has $\langle u_q, \hat{u}_x\rangle/\sigma_x^2 = 1$ (or exact radial comparison $R(r_q, r_v)$), whereas direct Lorentz coordinate quantization suffers $\Theta(e^{\rho_q + \max(\rho_x,\rho_y)}/\sqrt{D})$ noise along the radial direction itself and provides no $O(1)$ radial lower bound $P_{\mathrm{rad}}$ prior to scanning $D$ coordinates.
+\end{proof}
+
+\section{Hyperbolic Vamana Pathologies, Stem-Excess Dominance, and Chord-Swap Invariants}
+\label{app:vamana_pathologies}
+
+\subsection{Complete Proof of Theorem~\ref{thm:vamana_pathologies}}
+\begin{proof}
+\textbf{Claim (1): Apollonius black-hole occlusion.}
+Let $u, p, v \in \Bball$ have geodesic radii $R_u, R_p, R_v$ from the origin $0$, with $\alpha R_p < R_u$.
+Applying the metric triangle inequality on $(\Bball, d_{\mathbb{B}})$ through $0$ gives two angle-independent bounds valid for \emph{all} spherical directions $u_u, u_p, u_v \in \Sunit$:
+\begin{equation}
+  \begin{aligned}
+    d_{\mathbb{B}}(p, v) &\le d_{\mathbb{B}}(p, 0) + d_{\mathbb{B}}(0, v) \\
+    &= R_p + R_v, \\
+    d_{\mathbb{B}}(u, v) &\ge \bigl|d_{\mathbb{B}}(u, 0) - d_{\mathbb{B}}(0, v)\bigr| \\
+    &\ge R_u - R_v.
+  \end{aligned}
+\end{equation}
+Whenever $R_v \le \frac{R_u - \alpha R_p}{\alpha + 1}$, rearranging $(\alpha + 1)R_v \le R_u - \alpha R_p$ yields $\alpha(R_p + R_v) \le R_u - R_v$, whence
+\begin{equation}
+  \alpha\,d_{\mathbb{B}}(p, v) \le \alpha(R_p + R_v) \le R_u - R_v \le d_{\mathbb{B}}(u, v)
+\end{equation}
+for every $\theta_{pv} \in [0, \pi]$ (attaining worst-case equality on $d_{\mathbb{B}}(p, v) = R_p + R_v$ when $u_v = -u_p$, i.e., $180^\circ$ opposite $p$).
+
+\textbf{Claim (2): Origin potential well and escape cap.}
+Since $\arccosh$ is strictly increasing on $[1, \infty)$ and $d_{\mathbb{B}}(q, 0) = R_q = \rho_q / \sqrt{c}$, we have $d_{\mathbb{B}}(q, v) < d_{\mathbb{B}}(q, 0)$ if and only if
+\begin{equation}
+  \begin{gathered}
+    \cosh\rho_q\cosh\rho_v - \sinh\rho_q\sinh\rho_v\,\gamma_{qv} < \cosh\rho_q \\
+    \iff \cosh\rho_q(\cosh\rho_v - 1) < \sinh\rho_q\sinh\rho_v\,\gamma_{qv}.
+  \end{gathered}
+\end{equation}
+For $R_q, R_v > 0$, $\sinh\rho_q\sinh\rho_v > 0$; dividing through and using the half-angle identity $\frac{\cosh\rho_v - 1}{\sinh\rho_v} = \frac{2\sinh^2(\rho_v/2)}{2\sinh(\rho_v/2)\cosh(\rho_v/2)} = \tanh(\rho_v/2)$ gives $\gamma_{qv} > \frac{\tanh(\rho_v/2)}{\tanh\rho_q} = \frac{\tanh(\sqrt{c}R_v/2)}{\tanh(\sqrt{c}R_q)}$.
+
+\textbf{Claim (3): Offset-intercept and proxy non-homogeneity distortion.}
+If $\hat{d}(x, y) = a\,\tilde{d}(x, y) + b$ with $a > 0, b \ne 0$, then
+\begin{equation}
+  \hat{d}(u, v) - \alpha\hat{d}(w, v) = a\bigl(\tilde{d}(u, v) - \alpha\tilde{d}(w, v)\bigr) + (1 - \alpha)b.
+\end{equation}
+Since $\alpha > 1$, $(1 - \alpha)b < 0$ for $b > 0$ (systematically over-pruning valid edges) and $(1 - \alpha)b > 0$ for $b < 0$ (under-pruning redundant edges).
+For direct proxy slack $\alpha P_{\mathbb{B}}(w, v) \le P_{\mathbb{B}}(u, v)$, note from~\eqref{eq:psi_prune} that exact geodesic slack requires $P_\alpha(P) = \frac{2}{c}(\cosh(\alpha\arccosh(1 + \frac{c}{2}P)) - 1)$: as $P \to 0^+$, $P_\alpha(P) \sim \alpha^2 P$, whereas as $P \to \infty$, $P_\alpha(P) \sim \frac{1}{c}(c P)^\alpha = c^{\alpha - 1} P^\alpha \gg \alpha P$ since $\alpha > 1$.
+Thus linear proxy slack $\alpha P$ severely underestimates true geodesic $\alpha$-balls at large boundary depths.
+\end{proof}
+
+\subsection{Reverse-Triangle Shortcut and Flat-Limit Vamana Equivalence}
+\paragraph{Lossless $O(1)$ Reverse-Triangle Shortcut.}
+By the reverse triangle inequality on $(\Bball, d_{\mathbb{B}})$, $\tilde{d}(w, v) = \sqrt{c}\,d_{\mathbb{B}}(w, v) \ge |\sqrt{c}\,d_{\mathbb{B}}(0, w) - \sqrt{c}\,d_{\mathbb{B}}(0, v)| = |\rho_w - \rho_v|$.
+Therefore, if $\alpha|\rho_w - \rho_v| > \tilde{d}_{\mathrm{eff}}(u, v; w)$, we immediately have $\alpha\tilde{d}(w, v) \ge \alpha|\rho_w - \rho_v| > \tilde{d}_{\mathrm{eff}}(u, v; w)$, proving $\neg\operatorname{Dom}_{\mathrm{geo}}(w \mid u, v)$ with zero false rejections and without computing $\arccosh$.
+
+\paragraph{Flat-Limit Equivalence ($c \to 0^+$ or $\Var(\rho) \to 0$).}
+Fix unit-sphere vectors $\{r_0 u_v\}_{v=1}^N$ with constant radius $r_0 > 0$ (or take $c \to 0^+$ at constant norm).
+Then $\rho_v = \rho_0$ for all $v$, so $|\rho_v - \rho_u| = 0 \le \delta_\rho$ for every pair $(u, v)$:
+(i) inward and outward elevator candidate sets $\{v : \rho_v < \rho_u - \epsilon_\rho\}$ and $\{v : \rho_v > \rho_u + \epsilon_\rho\}$ are empty ($q_{\mathrm{in}} = q_{\mathrm{out}} = 0$);
+(ii) $\Delta_{\mathrm{stem}}(u, v; w) = 0$ and $\tilde{d}_{\mathrm{eff}}(u, v; w) = \tilde{d}(u, v)$, while as $c \to 0^+$, $\tilde{d}(x, y)/\sqrt{c} \to r_0\|u_x - u_y\|_2 = r_0\sqrt{2\ell_\angle(x, y)}$, so $\ell_\angle(w, v) \le \ell_\angle(u, v)$ becomes redundant under $\alpha > 1$ and both $\operatorname{Dom}_{\mathrm{geo}}$ and isobathic pruning reduce to standard spherical {Vamana}/{\quiver} pruning. \qed
+
+\subsection{Degree-$M_0$ and Reachability Invariant of Chord-Swap Island Repair}
+\begin{proposition}[Chord-Swap Invariant]
+\label{prop:chord_swap_invariant}
+Suppose the router entry set $\mathcal{E} \subset V$ is non-empty and every sweep $s$ of Lines 12--22 in Algorithm~\ref{alg:compass_build} processes unreachable vertices $u \in V \setminus \mathcal{R}^{(s)}$ sequentially (updating in-degrees $\deg^-(w)$ in place).
+Whenever anchor $p \in \mathcal{R}^{(s)}$ either satisfies $\deg^+(p) < M_0$ or owns at least one outgoing neighbor $w^\star$ with $\deg^-(w^\star) \ge 2$ whose unique path from $\mathcal{E}$ does not traverse $p \to w^\star$, replacing $p \to w^\star$ with $p \to u$ preserves $\deg^+(v) \le M_0$ for all $v \in V$, maintains $\deg^-(w) \ge 1$ for every $w \in \mathcal{R}^{(s)} \setminus \mathcal{E}$, and strictly increases $|\mathcal{R}|$ when $p$ remains reachable.
+\end{proposition}
+\begin{proof}
+Appending $p \to u$ when $\deg^+(p) < M_0$ increases $\deg^+(p)$ by at most $1$ ($\le M_0$) and deletes no edges, so $\mathcal{R}^{(s)} \cup \{u\} \subseteq \mathcal{R}^{(s+1)}$.
+When $\deg^+(p) = M_0$, replacing $p \to w^\star$ by $p \to u$ leaves $\deg^+(p) = M_0$ unchanged, increments $\deg^-(u)$ from $0$ to $1$, and decrements $\deg^-(w^\star)$ to $\deg^-(w^\star) - 1 \ge 1$.
+Because multi-source {BFS} in sweep $s+1$ recomputes $\mathcal{R}^{(s+1)}$ exactly from $\mathcal{E}$, even if a cycle among non-tree chords temporarily disconnects a descendant, at most $2$--$3$ outer {BFS} sweeps re-anchor any residual component directly to the verified reachable tree.
+\end{proof}
+
+\section{Tangent-Cone Recovery, Pool-Dilution Inversion, Off-Axis CJ-Gate, and Sketch Variance}
+\label{app:tangent_cone}
+
+\subsection{Complete Proof of Theorem~\ref{thm:tangent_cone}}
+\begin{proof}
+\textbf{Part (1): Global {SM} margin collapse.}
+With $r_x = r_y = r$ and $\alpha_x = \alpha_y = \alpha = \sqrt{1 - \beta^2}$, $R(r_q, r_x) = R(r_q, r_y)$ and $\gamma_{qy} - \gamma_{qx} = (\alpha_{q,c}\alpha + \beta_{q,c}\beta\langle \tilde{r}_{q,c}, \tilde{r}_y\rangle) - (\alpha_{q,c}\alpha + \beta_{q,c}\beta\langle \tilde{r}_{q,c}, \tilde{r}_x\rangle) = \beta_{q,c}\beta\Delta_{\tilde{r}}$, giving $|\Psi_{\mathrm{rank}}(q; x, y)| = W\beta_{q,c}\beta|\Delta_{\tilde{r}}|$.
+Under ambient 2-bit {SM} quantization of $u_v = \alpha\mu_c + \beta\tilde{r}_v$, for generic $\mu_c$ with non-vanishing coordinate magnitudes bounded away from $0$ and $\tau(\mu_c)$ on a constant fraction of coordinates, $\beta \to 0$ leaves $s_v = s(\mu_c)$ and $m_v = m(\mu_c)$ unchanged on $1 - O(\beta)$ of coordinates while tangent perturbations flip at most $O(D\beta)$ boundary coordinates with quantization step $\Theta(1/\sqrt{D})$, yielding quantization error variance $\Omega(\kappa_{\mathrm{SM}}/D)$ along generic tangent query directions (or zero resolution once $\beta$ falls below coordinate threshold spacing, where distinct intra-cone points collide onto identical 2-bit codes).
+Multiplying by $W$ yields $\sqrt{\Var(\Delta\widehat{\Psi}_{\mathrm{global}})} = \Omega(W\sqrt{\kappa_{\mathrm{SM}}/D})$ and~\eqref{eq:mnr_collapse}.
+
+\textbf{Part (2): Fixed-budget pool-dilution recall inversion.}
+Suppose beam traversal of width $L$ visits $N_c(L) \ge B$ vertices from cone $c$ (where inter-cone separation keeps out-of-cone vertices at much larger proxy values), including $k_{\mathrm{vis}}(L) \le k$ true top-$k$ neighbors.
+Write each intra-cone candidate's approximate score as $\widehat{P}(q, v_j) = P_0 + W\beta_{q,c}\beta\,g_j + W\xi_j$, where $|g_j| \le 2$ and $\{\xi_j\}_{j=1}^{N_c(L)}$ are exchangeable noise variables with scale $\sigma_\xi = \Theta(\sqrt{\kappa_{\mathrm{SM}}/D})$.
+As $\beta_{q,c}\beta / \sigma_\xi \to 0$ ($\MNR_{\mathrm{global}} \to 0$) with continuous tie-breaking, the induced rank order of $\{\widehat{P}(q, v_j)\}_{j=1}^{N_c(L)}$ converges in distribution to a uniform random permutation of $\{1, \dots, N_c(L)\}$.
+Selecting the smallest $B$ proxy values therefore samples a uniform hypergeometric subset of size $B$ from $N_c(L)$ items, so expected true-neighbor admission into $F_B(q)$ converges to
+\begin{equation}
+  \begin{aligned}
+    &\E\bigl[|G_k(q) \cap F_B(q)| \;\big|\; k_{\mathrm{vis}}(L), N_c(L)\bigr] \\
+    &\xrightarrow{\;\MNR_{\mathrm{global}} \to 0\;}
+      k_{\mathrm{vis}}(L)\cdot \min\!\left(1,\; \frac{B}{N_c(L)}\right).
+  \end{aligned}
+\end{equation}
+Once $k_{\mathrm{vis}}(L)$ saturates near $k$ (e.g., $93.9\%$ already visited at $L=256$ on {Clustered-Narrow-1M}) while expanding $L$ from $256$ to $2{,}048$ continues admitting hundreds of additional intra-cone distractors into $N_c(L)$, $B / N_c(L)$ drops sharply, proving non-monotonic recall inversion with respect to $L$ at fixed $B$.
+
+\textbf{Part (3): Local tangent-cone {$\MNR$} recovery.}
+Under~\eqref{eq:cone_estimator}, $\alpha_{q,c} = \langle u_q, \mu_c\rangle$ and $\alpha_v$ are stored/computed in FP32, so $\beta_{q,c} = \sqrt{1 - \alpha_{q,c}^2}$ and $\beta_v = \sqrt{1 - \alpha_v^2}$ are exact up to machine precision ($< 10^{-7}$).
+Let $\tilde{e}_v = \hat{\gamma}_{\mathrm{asym}}(\tilde{r}_{q,c}, \tilde{r}_v) - \langle \tilde{r}_{q,c}, \tilde{r}_v\rangle$ denote the 2-bit {SM} estimation error on the unit $(D-2)$-sphere $T_{\mu_c}\Sunit \cap \Sunit$, which has variance $\kappa_{\mathrm{SM}}/D$ since $\|\tilde{r}_{q,c}\|_2 = \|\tilde{r}_v\|_2 = 1$.
+Then $\widehat{P}_{\mathrm{cone}}(q, v) - P_{\mathbb{B}}(q, v) = -W\beta_{q,c}\beta_v \tilde{e}_v$.
+For distinct tangent directions $\tilde{r}_x, \tilde{r}_y$ with $\beta_x = \beta_y = \beta$, $\Delta\widehat{\Psi}_{\mathrm{cone}} = W\beta_{q,c}\beta(\tilde{e}_y - \tilde{e}_x)$ has standard deviation $\sqrt{2\kappa_{\mathrm{SM}}/D}\,W\beta_{q,c}\beta$, and dividing $|\Psi_{\mathrm{rank}}| = W\beta_{q,c}\beta|\Delta_{\tilde{r}}|$ by this standard deviation cancels $W\beta_{q,c}\beta$ identically to yield~\eqref{eq:mnr_recovery}.
+\end{proof}
+
+\subsection{Off-Axis CJ-Gate Jacobian and $5.49\times$ Underestimation Counterexample}
+From $P_{\mathbb{B}}(q, v) = R(r_q, r_v) + 2 r_q r_v f_q f_v(1 - \gamma_{qv})$ and~\eqref{eq:cone_estimator}, only $\hat{\gamma}_{\mathrm{asym}}(\tilde{r}_{q,c}, \tilde{r}_v)$ carries quantization uncertainty $\sigma_0 = \sqrt{\kappa_{\mathrm{SM}}/D}$, multiplied by $\frac{\partial \hat{\gamma}_{\mathrm{cone}}}{\partial \hat{\gamma}_{\mathrm{asym}}} = \beta_{q,c}\beta_v$ and $\bigl|\frac{\partial P_{\mathbb{B}}}{\partial \gamma_{qv}}\bigr| = 2 r_q r_v f_q f_v$, proving~\eqref{eq:cj_sigma}.
+If an implementation approximates $q$ as lying at the cluster center ($\beta_{q,c} \approx \beta_v$), replacing $\beta_{q,c}\beta_v$ by $\beta_v^2$ mis-scales $\sigma_P(q, v)$ by $\frac{\beta_{q,c}}{\beta_v}$: for a boundary-cone query at $\alpha_{q,c} = 0.84$ ($\beta_{q,c} = \sqrt{1 - 0.84^2} \approx 0.5426$) evaluating a near-axis candidate at $\alpha_v = 0.9951$ ($\beta_v = \sqrt{1 - 0.9951^2} \approx 0.0989$), $\frac{\beta_{q,c}}{\beta_v} = \frac{0.5426}{0.0989} \approx 5.49$, underestimating true plateau uncertainty by $5.49\times$.
+Using exact $\tilde{\beta}(q, v) = \beta_{q,c}\beta_v$ eliminates this underestimation across all query angles.
+
+\subsection{Binomial Variance Propagation for \texttt{SymSketch256}}
+Let $H \in \{0, \dots, B_s\}$ ($B_s = 256$) be the Hamming distance over $B_s$ sampled coordinates with disagreement probability $p \in (0, 1)$, so $\E[H/B_s] = p$ and $\Var(H/B_s) = \frac{p(1 - p)}{B_s}$.
+Applying the first-order delta method to $g(p) = \cos(\pi p)$ ($|g'(p)| = \pi\sin(\pi p)$) gives
+\begin{equation}
+  \sigma_{\mathrm{sk}}(p) = \bigl|g'(p)\bigr|\sqrt{\Var(H/B_s)} = \frac{\pi}{\sqrt{B_s}}\sin(\pi p)\sqrt{p(1 - p)}.
+\end{equation}
+Define $u(p) = \sin(\pi p)\sqrt{p(1 - p)}$.
+At high-similarity reference $p_{\mathrm{ref}} = 48 / 256 = 0.1875$ ($\cos(\pi p_{\mathrm{ref}}) \approx 0.8315$), $u(p_{\mathrm{ref}}) = \sin(0.1875\pi)\sqrt{0.1875 \times 0.8125} \approx 0.5556 \times 0.3903 \approx 0.2168$.
+Near orthogonality $p = 115 / 256 \approx 0.4492$ ($\cos(\pi p) \approx 0.159$), $u(p) = \sin(0.4492\pi)\sqrt{0.4492 \times 0.5508} \approx 0.9873 \times 0.4974 \approx 0.4911$, giving $\frac{u(115/256)}{u(48/256)} \approx \frac{0.4911}{0.2168} \approx 2.265$ (peaking at $0.5 / 0.2168 \approx 2.306$ at $p = 0.5$). \qed
+
+\section{Four-Stage Telescoping Recall-Loss Identity and Supplementary Breakdowns}
+\label{app:loss_decomposition}
+
+\subsection{Proof of the Four-Stage Telescoping Recall-Loss Identity~\eqref{eq:four_stage_loss}}
+\begin{proof}
+Because every stage filters the output of the preceding stage ($R_k(q) \subseteq F_B(q) \subseteq C_L(q) \subseteq V(q)$), intersecting with $G_k(q)$ preserves inclusion:
+\begin{equation}
+  \begin{aligned}
+    G_k(q) \cap R_k(q) &\subseteq G_k(q) \cap F_B(q) \\
+    &\subseteq G_k(q) \cap C_L(q) \\
+    &\subseteq G_k(q) \cap V(q) \subseteq G_k(q).
+  \end{aligned}
+\end{equation}
+For any finite nested chain $A_4 \subseteq A_3 \subseteq A_2 \subseteq A_1 \subseteq A_0$ with $|A_0| = k$, $|A_0| - |A_4| = |A_0 \setminus A_1| + |A_1 \setminus A_2| + |A_2 \setminus A_3| + |A_3 \setminus A_4|$; dividing by $k$ yields~\eqref{eq:four_stage_loss}.
+Moreover, suppose exact IEEE-754 FP64 reranking sorts $F_B(q)$ strictly by true geodesic distance $d_{\mathbb{B}}(q, \cdot)$ (with consistent tie-breaking matching $G_k(q)$) and returns the top $k$ elements $R_k(q)$ ($|F_B(q)| \ge k$).
+For any $v^\star \in G_k(q) \cap F_B(q)$, at most $k - 1$ points in the entire dataset $\mathcal{X}$---and a fortiori at most $k - 1$ points in $F_B(q) \subseteq \mathcal{X}$---precede $v^\star$ in exact geodesic order, so $v^\star$ must lie in the top $k$ of $F_B(q)$, i.e., $v^\star \in R_k(q)$.
+Hence $G_k(q) \cap (F_B(q) \setminus R_k(q)) = \emptyset$ and $\mathcal{L}_{\mathrm{rerank}}(q) \equiv 0$.
+\end{proof}
+
+\subsection{Supplementary Stage-Wise Audit and Component Ablation Matrix}
+
+\begin{table}[h]
+  \centering
+  \caption{Controlled component ablation on {Clustered-Narrow-1M} ($D=512, \rho \in [3.9, 4.1]$, fixed $L=256, B=128$, AMD Zen~4 32T build / 1T search).}
+  \label{tab:app_stage_audit}
+  \small
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}Xrrrr@{}}
+    \toprule
+    \textbf{Configuration} & \textbf{Cones} & \textbf{Build (32T)} & \textbf{Recall@10} & \textbf{1T QPS} \\
+    \midrule
+    Unrescued Base (\texttt{A0B0C0}) & 0 & 21.9\,s & 34.22\% & \textbf{2,071} \\
+    \texttt{A}-Only (\textsc{CJ-Gate}) & 0 & 21.9\,s & 50.59\% & 1,884 \\
+    \texttt{C}-Only (Asym Sketch) & 0 & 21.5\,s & 34.22\% & 1,960 \\
+    \texttt{AB} (\texttt{ResidualConeDict}+\textsc{CJ}) & 256 & 25.7\,s & 99.37\% & 1,958 \\
+    \textbf{Full \rquiver{} (\texttt{ABC})} & \textbf{256} & 25.3\,s & \textbf{99.39\%} & 1,840 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Table~\ref{tab:app_stage_audit} reports the controlled fixed-budget ablation ($L=256, B=128$, independent Zen~4 graph builds per configuration) on {Clustered-Narrow-1M}:
+on the diagnostic subset, unrescued \texttt{A0B0C0} visits $93.9\%$ of true neighbors ($\mathcal{L}_{\mathrm{miss}} = 6.1\%$) yet loses $44.6\%$ inside the bounded $L$-beam ($\mathcal{L}_{\mathrm{beam}}$) and $16.3\%$ at pool gating ($\mathcal{L}_{\mathrm{gate}}$, $33.0\%$ subset / $34.22\%$ full Recall@10);
+expanding rerank plateau budgets alone (\texttt{A}-Only) eliminates $\mathcal{L}_{\mathrm{gate}}$ and lifts full-benchmark recall only from $34.22\%$ to $50.59\%$ because $\mathcal{L}_{\mathrm{beam}} = 44.6\%$ of true neighbors were already evicted from $C_L(q)$ during beam maintenance;
+by contrast, restoring intra-cone {$\MNR$} at the representation level via \texttt{ResidualConeDict} eliminates both $\mathcal{L}_{\mathrm{beam}}$ and $\mathcal{L}_{\mathrm{gate}}$, reaching $99.37\%$ (\texttt{AB}, $1{,}958$\,QPS) and $99.39\%$ Recall@10 under full \rquiver{} (\texttt{ABC}, $1{,}840$\,QPS 1T and $38{,}876$\,QPS 24T, climbing to $99.80\%$ at $L=384, B=128$) with zero per-vertex memory increase.

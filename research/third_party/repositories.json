@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "repositories": [
+    {
+      "name": "hyperspace-db",
+      "group": "systems",
+      "path": "systems/hyperspace-db",
+      "url": "https://github.com/YARlabs/hyperspace-db.git",
+      "revision": "89d04062588fa6a8f06f5804d57713f484d99fb7",
+      "working_tree_modified": false
+    },
+    {
+      "name": "HypRAG",
+      "group": "systems",
+      "path": "systems/HypRAG",
+      "url": "https://github.com/Graph-and-Geometric-Learning/HypRAG.git",
+      "revision": "83d7be3c392b07419cbeaeeff7ce3bc4e891f989",
+      "working_tree_modified": false
+    },
+    {
+      "name": "hyem",
+      "group": "representations",
+      "path": "representations/hyem",
+      "url": "https://github.com/oudeng/HyEm.git",
+      "revision": "7f0de2eb6c097309c07706148a613cf881870318",
+      "working_tree_modified": false
+    },
+    {
+      "name": "hyperbolic-cones",
+      "group": "representations",
+      "path": "representations/hyperbolic-cones",
+      "url": "https://github.com/dalab/hyperbolic_cones.git",
+      "revision": "fbf1558e9f455b68f5a0069968341c3ce4b78390",
+      "working_tree_modified": false
+    },
+    {
+      "name": "hyperbolic-metric-learning",
+      "group": "representations",
+      "path": "representations/hyperbolic-metric-learning",
+      "url": "https://github.com/htdt/hyp_metric.git",
+      "revision": "c89de0490691bacbd7332171c5455651fe49f25e",
+      "working_tree_modified": false
+    },
+    {
+      "name": "hypercore",
+      "group": "representations",
+      "path": "representations/hypercore",
+      "url": "https://github.com/Graph-and-Geometric-Learning/HyperCore.git",
+      "revision": "73948db3a1130884042183880f8c5ad66df8bc2a",
+      "working_tree_modified": false
+    },
+    {
+      "name": "manify",
+      "group": "representations",
+      "path": "representations/manify",
+      "url": "https://github.com/pchlenski/manify.git",
+      "revision": "18028ecc58cf6af378fa3ca578ddc3eb90ac11de",
+      "working_tree_modified": false
+    },
+    {
+      "name": "meru",
+      "group": "representations",
+      "path": "representations/meru",
+      "url": "https://github.com/facebookresearch/meru.git",
+      "revision": "6d4430055f58354539f68668175135256f99d47f",
+      "working_tree_modified": false
+    },
+    {
+      "name": "mixed-curvature-hyperbolics",
+      "group": "representations",
+      "path": "representations/mixed-curvature-hyperbolics",
+      "url": "https://github.com/HazyResearch/hyperbolics.git",
+      "revision": "59f79b1225775e3deb5b1f7c4238bf539648a329",
+      "working_tree_modified": false
+    },
+    {
+      "name": "score-based-pullback",
+      "group": "representations",
+      "path": "representations/score-based-pullback",
+      "url": "https://github.com/GBATZOLIS/Score-Based-Pullback-Riemannian-Geometry.git",
+      "revision": "7d0dbd43f4c02a3493e2e6967797efb1e1a8533a",
+      "working_tree_modified": false
+    }
+  ]
+}

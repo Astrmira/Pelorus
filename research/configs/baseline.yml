@@ -1,0 +1,26 @@
+experiment:
+  seed: 42
+  output_dir: artifacts
+
+embedding:
+  provider: openai_compatible
+  base_url_env: EMBEDDING_API_BASE_URL
+  api_key_env: EMBEDDING_API_KEY
+  model: Qwen3-Embedding-8B
+  batch_size: 8
+  normalize: true
+
+evaluation:
+  top_k: [1, 5, 10]
+  exact_search_first: true
+  dimensions:
+    - role_direction
+    - negation
+    - temporal_update
+    - conditional_aspect
+
+baselines:
+  - cosine
+  - whitened_cosine
+  - euclidean_adapter
+  - hyperbolic_adapter

@@ -1,0 +1,22 @@
+/target
+
+# 本地研究环境与生成结果。
+**/__pycache__/
+**/.pytest_cache/
+**/.ipynb_checkpoints/
+**/.venv/
+*.py[cod]
+.env
+.env.*
+!.env.example
+
+# 第三方检出保存在本地，仓库记录其来源与提交。
+/others/
+/research/code_repositories/
+/research/third_party/systems/
+/research/third_party/representations/
+/research/papers/pdf/
+/research/papers/notes/
+
+# 论文编译输出。
+/paper/vldb/build/

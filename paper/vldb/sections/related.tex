@@ -1,0 +1,77 @@
+% 第七章：相关工作——系统梳理学界与工业界四大方向存量工作的底层机制、几何假设及与本文的技术分野
+\section{Related Work}
+\label{sec:related}
+
+We position \rquiver{} relative to academic and industrial work across four areas: hyperbolic representation learning and non-Euclidean indexing, proximity-graph topology design, low-bit vector quantization, and production vector database systems.
+
+% 7.1 双曲流形表示学习与非欧/双曲近邻检索机制剖析
+\subsection{Hyperbolic Representations and Non-Euclidean Indexing}
+\label{subsec:rel_hyperbolic}
+
+\paragraph{Curved Representation Models.}
+Negatively curved manifolds embed trees and asymmetric hierarchies with exponentially lower distortion than flat Euclidean spaces~\cite{nickel2017poincare,sala2018representation}.
+Foundational models formulate optimization directly on the {Poincar\'e} ball for taxonomies, neural layers, and lexical semantics~\cite{ganea2018hyperbolic,tifrea2019poincare}, or parameterize partial orders via {Poincar\'e} entailment cones~\cite{ganea2018entailment}.
+Parallel lines adopt the {Lorentz} hyperboloid and mixed-curvature product manifolds to stabilize Riemannian gradients across graph neural networks~\cite{nickel2018lorentz,chami2019hgcn,gu2019mixed}, low-dimensional knowledge graphs~\cite{chami2020low}, and fully hyperbolic Transformer backbones~\cite{chen2022fully}.
+In visual and multimodal retrieval, hyperbolic metric learning captures semantic uncertainty and part-whole hierarchies in image encoders~\cite{khrulkov2020hyperbolic,ermolov2022hyperbolic}, scaling to million-item contrastive vision-language alignment in Meta's {MERU}~\cite{desai2023meru} and hierarchical passage retrieval for generation in {HypRAG}~\cite{madhu2026hyprag,lewis2020rag}.
+\rquiver{} unifies both {Poincar\'e} and {Lorentz} workloads at ingestion via exact stereographic projection~\eqref{eq:lorentz_isometry}, avoiding unbounded spatial-norm quantization blowup on $\Lmod$ (Theorem~\ref{thm:conformal_flip}(3)).
+
+\paragraph{Metric, Hashing, and Graph Search in Curved Spaces.}
+Classical metric indexes such as vantage-point trees ({vp-tree})~\cite{yianilos1993data} and navigating nets in doubling or negatively curved spaces~\cite{krauthgamer2006navigating} prune subtrees via exact triangle inequalities, but shell concentration in $D \ge 512$ dimensions causes metric ball bounds to overlap nearly the entire dataset.
+On the hashing side, Deng et al.~\cite{deng2026hyperboliclsh} recently constructed native locality-sensitive hashing ({LSH}) families in hyperbolic space, though data-oblivious hashing requires many hash tables or wide candidate probes to sustain $99\%+$ recall in high dimensions.
+Empirical non-Euclidean graph libraries led by {NMSLIB}~\cite{boytsov2013engineering} (deployed in early OpenSearch engines), the theoretical hyperbolic graph analysis of Prokhorenkova et al.~\cite{prokhorenkova2022hyperbolic}, and the dedicated hyperbolic engine {HyperspaceDB}~\cite{glukhota2026hyperspacedb} demonstrate that greedy proximity-graph routing adapts to intrinsic manifold structure.
+Nevertheless, existing hyperbolic graph indices evaluate exact geodesic distances over full-precision coordinates at every hop---fetching $2\text{--}6$\,KB per visited vertex and requiring FP64 arithmetic near $\|x\|_2 \to 1/\sqrt{c}$---while selecting edges with a single isotropic predicate.
+\rquiver{} instead factors the warped-product metric into exact 32-byte radial scalars plus 2-bit spherical bitplanes and replaces isotropic pruning with stem-excess 4-Way Compass diversity.
+
+% 7.2 近邻图拓扑演进、倾斜/OOD 路由与存储局部性对比
+\subsection{Proximity-Graph Topology and Skewed Routing}
+\label{subsec:rel_graphs}
+
+\paragraph{Flat Proximity Graphs and Benchmarks.}
+Navigable small-world graphs ({NSW}~\cite{malkov2014approximate} and hierarchical {HNSW}~\cite{malkov2020hnsw}), approximate relative-neighborhood and satellite-system graphs ({NSG}~\cite{fu2019nsg} and {NSSG}~\cite{fu2022high}), and Microsoft's $\alpha$-slack {Vamana} index ({DiskANN})~\cite{subramanya2019diskann} define the standard in-memory and SSD-resident {ANN} paradigms, as established across standardized community benchmarks~\cite{aumuller2020annbenchmarks,wang2021comprehensive,simhadri2022results,azizi2025graph}.
+Production extensions of {DiskANN} support streaming updates in {FreshDiskANN}~\cite{singh2021freshdiskann}, centroid-partitioned disk posting lists in {SPANN}~\cite{chen2021spann}, and structured predicate filtering in {Filtered-DiskANN}~\cite{gollapudi2023filtered}.
+All of these pruning rules assume a translation-invariant or constant-curvature flat ambient metric: when transplanted to $\Bball$, inward-bending geodesics enable interior vertices to shadow $360^\circ$ boundary neighborhoods via Apollonius black-hole occlusion and pull trajectories into the origin potential well (Theorem~\ref{thm:vamana_pathologies}).
+
+\paragraph{Skewed Distributions, Hub Occlusion, and Block Locality.}
+Recent database indices examine routing pathologies and block layout from complementary angles.
+{RoarGraph}~\cite{chen2024roargraph} shows that cross-modal out-of-distribution ({OOD}) queries suffer hub occlusion and long detours on flat inner-product graphs, mitigating shift by building a bipartite graph over historical query projections.
+In negatively curved spaces, hub occlusion arises even for \emph{in-distribution} queries as an intrinsic geometric consequence of $\sinh(\sqrt{c}R)$ fiber expansion rather than query-modality shift.
+\rquiver{} eliminates occlusion without historical query logs through Inside-Out depth seeding, stem-excess angle-guarded dominance, shielded isobathic rings, spanning-tree chord-swap island repair, and closed-form geodesic apex routing, while continuously recovering flat spherical {Vamana} as $c \to 0^+$.
+For storage locality, {Starling}~\cite{wang2024starling} reorders disk-resident graph neighborhoods into $4$\,KiB SSD segments to reduce physical block reads per hop.
+Addressing the in-memory {DTLB} translation bottleneck rather than SSD block I/O, \rquiver{}'s \texttt{HotSmPage} co-locates polar headers, 256-bit sketches, and primary 2-bit bitplanes of 32 consecutive vertex IDs inside one $4096$\,B OS page, eliminating secondary page-table walks without graph-isomorphism reordering.
+
+% 7.3 学界与工业界低比特向量量化及量化图融合对比
+\subsection{Low-Bit Vector Quantization in Academia and Industry}
+\label{subsec:rel_quantization}
+
+\paragraph{Subspace and Anisotropic Codebooks.}
+Product quantization ({PQ}~\cite{jegou2011pq} and {OPQ}~\cite{ge2013opq}) partitions flat vectors into learned subspaces, while {PQ Fast Scan}~\cite{andre2015cache} and {Quick ADC}~\cite{andre2017accelerated} pack 4-bit lookup tables into {SIMD} registers via \texttt{vpshufb} shuffles.
+In industrial maximum inner-product search ({MIPS}), Google's {ScaNN}~\cite{guo2020accelerating} observes that quantization error parallel to a candidate vector perturbs rankings more severely than orthogonal error, motivating anisotropic codebook losses and spilled orthogonal-residual assignment in {SOAR}~\cite{sun2023soar}.
+Subspace codebooks, however, require offline iterative clustering and assume fixed flat inner-product weights.
+On $\Bball$, the directional weight $W(r_q, r_v) = \frac{2}{c}\sinh\rho_q\sinh\rho_v$ varies exponentially across candidate pairs and diverges near $r_v \to 1/\sqrt{c}$, which \rquiver{} isolates analytically in exact polar headers before touching directional codes.
+
+\paragraph{Industrial Locally-Adaptive Scalar and Binary Quantization.}
+To avoid codebook training during graph traversal, Intel's Scalable Vector Search ({SVS}) introduces Locally-Adaptive Vector Quantization ({LVQ})~\cite{aguerrebere2023similarity}, centering and scaling each vector individually into 4-bit or 8-bit integers, and {LeanVec}~\cite{tepper2024leanvec}, which pairs learned linear dimensionality reduction with {LVQ} to shrink memory bandwidth.
+In enterprise search engines, Apache {Lucene} and {Elasticsearch} deploy Better Binary Quantization ({BBQ})~\cite{trent2024bbq}, combining centered 1-bit database codes with asymmetric 4-bit query lookup tables.
+Two technical boundaries separate these flat production quantizers from \rquiver{}.
+On coordinate adaptation, {LVQ}'s per-vector scalar centering and scaling operate on ambient coordinates and cannot factor out the nonlinear {Poincar\'e} denominator $(1 - c\|x\|_2^2)$ or prevent tight semantic cones ($\alpha_v = \langle u_v, \mu_c\rangle \to 1$) from expending dynamic range on the shared cluster axis $\mu_c$.
+\rquiver{}'s purity-gated \texttt{ResidualConeDict} explicitly subtracts $\alpha_v\mu_c$ in the spherical tangent space $T_{\mu_c}\Sunit$ at $0$\,B/vertex overhead, restoring intra-cluster {$\MNR$} by $\Theta(1/(\beta_{q,c}\beta_v))$ (Theorem~\ref{thm:tangent_cone}).
+On bit-width fidelity, compared with 1-bit {BBQ}~\cite{trent2024bbq}, two-level 2-bit {SM} retains strong-magnitude coordinates and pairs an L1 nibble lookup kernel (\textsc{Stage-0.5}, inspired at the register level by {SIMD} shuffle tables~\cite{andre2015cache,andre2017accelerated}) with a zero-assumption Pythagorean orthogonal-projection divisor $\sigma_v^2$ (Proposition~\ref{prop:asym_cj_gate}(1)) that removes multiplicative shrinkage deterministically.
+
+\paragraph{Randomized Bit Quantization, Quantized Graphs, and Decision Theory.}
+Locality-sensitive hashing and random hyperplane rounding ({SimHash})~\cite{indyk1998approximate,charikar2002similarity} initiated 1-bit angular estimation.
+Recent database work achieves strong theoretical guarantees in flat Euclidean space via {RaBitQ}~\cite{gao2024rabitq}, asymptotically optimal extended {RaBitQ}~\cite{gao2025extendedrabitq}, and {SymphonyQG}~\cite{gou2025symphonyqg}, which tightly co-layouts randomized quantized codes inside graph neighbor blocks.
+Both {RaBitQ} and {SymphonyQG} rely on a \emph{global random orthogonal rotation} to equalize coordinate variances.
+On contrastive neural embeddings---whose representations exhibit structured coordinate anisotropy and local Gaussian concentration~\cite{wang2020understanding,betser2026infonce}---companion Bussgang-style~\cite{bussgang1952crosscorrelation} decision analysis for flat {\quiver}~\cite{xiao2026quiver,xiao2026decisions} proves that global random rotations destroy native coordinate covariance and weaken shared-endpoint error cancellation.
+\rquiver{} remains rotation-free across diffuse real manifolds, activates local tangent-cone residuals strictly when build-time cone purity exceeds $\bar{\alpha}_c \ge 0.955$, and extends flat two-bit decision theory to conformal Riemannian metrics by characterizing query depth invariance, cross-shell query-noise non-cancellation, pool-dilution recall inversion, and off-axis Conformal Jacobian plateau gating (\textsc{CJ-Gate}).
+
+% 7.4 工业界生产级向量数据库与混合查询系统定位
+\subsection{Production Vector Database Systems}
+\label{subsec:rel_systems}
+
+Modern vector data management spans specialized vector engines and relational-hybrid databases~\cite{pan2024survey}.
+Meta's {Faiss} provides CPU and GPU kernels for flat, IVF-PQ, and {HNSW} search~\cite{johnson2019billion,douze2024faiss}, while Zilliz's {Milvus}~\cite{wang2021milvus} and cloud-native {Manu}~\cite{guo2022manu} disaggregate storage, streaming ingestion, and multi-replica index execution.
+On the hybrid analytical and transactional front, Alibaba's {PASE}~\cite{yang2020pase} and {AnalyticDB-V}~\cite{wei2020analyticdb} integrate quantized and graph vector indexes into {PostgreSQL} and cloud analytical optimizers.
+Microsoft's {VBASE}~\cite{zhang2023vbase} unifies online vector traversal and relational predicates by exploiting relaxed distance monotonicity along proximity-graph iterators, and {SingleStore-V}~\cite{chen2024singlestore} embeds segmented {HNSW} and subspace compression inside a distributed SQL engine.
+All of these industrial engines assume flat $L_2$, cosine, or inner-product distance kernels.
+Hosting hyperbolic embeddings ({MERU}, {HypRAG}) on flat inner-product indices requires fetching wide candidate pools across mismatched radial shells before exact geodesic reranking.
+Because \rquiver{}'s polar proxy $P_{\mathbb{B}}(q, v)$ is strictly order-isomorphic to $d_{\mathbb{B}}(q, v)$ (satisfying {VBASE}-style relaxed monotonicity~\cite{zhang2023vbase}) and encapsulates its state in stateless $4096$\,B pages plus standard CSR adjacency arrays, our polar 2-bit operator can serve directly as a native curved-manifold index engine inside modular vector DBMS architectures.

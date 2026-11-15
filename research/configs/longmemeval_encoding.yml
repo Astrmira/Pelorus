@@ -1,0 +1,52 @@
+experiment:
+  seed: 20260910
+  dataset_manifest: data/processed/longmemeval_turn_pairs/encoding_manifest.json
+  output_dir: artifacts/embeddings/longmemeval_turn_pairs
+
+inputs:
+  documents: data/processed/longmemeval_turn_pairs/encoding_documents.jsonl
+  queries: data/processed/longmemeval_turn_pairs/encoding_queries.jsonl
+  document_id_field: id
+  query_id_field: id
+  text_field: text
+
+embedding:
+  provider: openai_compatible
+  base_url_env: EMBEDDING_API_BASE_URL
+  api_key_env: EMBEDDING_API_KEY
+  model: Qwen3-Embedding-8B
+  endpoint: /embeddings
+  encoding_format: float
+  dimensions: 1536
+  normalize_embeddings: true
+  batch_size: 8
+  max_batch_tokens: 8192
+  requests_per_minute: 8
+  max_input_tokens: 32768
+  truncation: false
+  document_prompt: null
+  query_prompt: null
+  user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36
+
+retry:
+  max_attempts: 6
+  backoff_base_seconds: 2.0
+  backoff_max_seconds: 90.0
+
+cache:
+  document_cache: artifacts/embeddings/longmemeval_turn_pairs/cache_documents.jsonl
+  query_cache: artifacts/embeddings/longmemeval_turn_pairs/cache_queries.jsonl
+  document_vectors: artifacts/embeddings/longmemeval_turn_pairs/documents.npy
+  query_vectors: artifacts/embeddings/longmemeval_turn_pairs/queries.npy
+  document_ids: artifacts/embeddings/longmemeval_turn_pairs/document_ids.json
+  query_ids: artifacts/embeddings/longmemeval_turn_pairs/query_ids.json
+  runtime_manifest: artifacts/embeddings/longmemeval_turn_pairs/runtime_manifest.json
+
+preflight:
+  require_source_hash_match: true
+  reject_duplicate_ids: true
+  reject_empty_text: true
+  reject_truncation: true
+  record_response_model: true
+  record_vector_dimensions: true
+  notice: 发起在线请求前必须核对服务商的准确 model ID 与上下文限制；API Key 和 Base URL 只从环境变量读取，严禁写入配置或运行清单。

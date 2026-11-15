@@ -1,0 +1,31 @@
+experiment:
+  seed: 20260918
+  dataset_manifest: data\processed\temporal_fresh_test\manifest.json
+  output_dir: artifacts\embeddings\temporal_fresh_test
+inputs:
+  documents: data\processed\temporal_fresh_test\documents.jsonl
+  queries: data\processed\temporal_fresh_test\queries.jsonl
+embedding:
+  provider: openai_compatible
+  base_url_env: EMBEDDING_API_BASE_URL
+  api_key_env: EMBEDDING_API_KEY
+  model: Qwen3-Embedding-8B
+  endpoint: /embeddings
+  dimensions: 1536
+  normalize_embeddings: true
+  batch_size: 8
+  max_batch_tokens: 8192
+  requests_per_minute: 8
+  user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36
+retry:
+  max_attempts: 3
+  backoff_base_seconds: 2.0
+  backoff_max_seconds: 30
+cache:
+  document_cache: artifacts\embeddings\temporal_fresh_test\cache_documents.jsonl
+  query_cache: artifacts\embeddings\temporal_fresh_test\cache_queries.jsonl
+  document_vectors: artifacts\embeddings\temporal_fresh_test\documents.npy
+  query_vectors: artifacts\embeddings\temporal_fresh_test\queries.npy
+  document_ids: artifacts\embeddings\temporal_fresh_test\document_ids.json
+  query_ids: artifacts\embeddings\temporal_fresh_test\query_ids.json
+  runtime_manifest: artifacts\embeddings\temporal_fresh_test\runtime_manifest.json

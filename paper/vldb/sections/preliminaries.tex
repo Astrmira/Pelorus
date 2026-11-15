@@ -1,0 +1,122 @@
+% 第二章：预备知识与问题建模——翘曲乘积双曲几何、洛伦兹等距映射、二比特条件均值勾股恒等式与离散比较算子
+\section{Preliminaries and Problem Formulation}
+\label{sec:prelim}
+
+We formalize hyperbolic metric models as warped-product manifolds, establish the exact polar geodesic proxy, characterize the two-level spherical Sign-Magnitude ({SM}) geometry, and define the discrete comparison decisions governing quantized graph construction and search.
+
+\subsection{Hyperbolic Models and Warped-Product Unification}
+\label{subsec:models}
+
+\paragraph{{Poincar\'e} Ball and {Lorentz} Stereographic Isometry.}
+For constant negative sectional curvature $-c < 0$, the $D$-dimensional {Poincar\'e} ball is the open manifold
+\begin{equation}
+  \Bball = \bigl\{x \in \R^D : c\|x\|_2^2 < 1\bigr\}, \qquad g_x^{\mathbb{B}} = f_x^2 I_D,
+  \label{eq:poincare_manifold}
+\end{equation}
+with conformal metric factor $f_x = \frac{2}{1 - c\|x\|_2^2}$.
+The Riemannian geodesic distance between $q, v \in \Bball$ is
+\begin{equation}
+  d_{\mathbb{B}}(q, v) = \frac{1}{\sqrt{c}}\arccosh\!\left(1 + \frac{2c\|q - v\|_2^2}{(1 - c\|q\|_2^2)(1 - c\|v\|_2^2)}\right).
+  \label{eq:poincare_dist}
+\end{equation}
+Many modern hyperbolic encoders, including fully hyperbolic networks~\cite{chen2022fully}, {MERU}~\cite{desai2023meru}, and {HypRAG}~\cite{madhu2026hyprag}, parameterize embeddings on the upper sheet of the $(D+1)$-dimensional {Lorentz} hyperboloid
+$\Lmod = \{z = (z_0, \tilde{z}) \in \R \times \R^D : -z_0^2 + \|\tilde{z}\|_2^2 = -1/c,\; z_0 > 0\}$
+under $d_{\mathbb{L}}(z, z') = \frac{1}{\sqrt{c}}\arccosh\bigl(c(z_0 z'_0 - \langle \tilde{z}, \tilde{z}'\rangle)\bigr)$.
+Stereographic projection $\Pi : \Lmod \to \Bball$,
+\begin{equation}
+  \Pi(z_0, \tilde{z}) = \frac{\tilde{z}}{1 + \sqrt{c}\,z_0},
+  \label{eq:lorentz_isometry}
+\end{equation}
+is a global Riemannian isometry satisfying $d_{\mathbb{B}}(\Pi(z), \Pi(z')) = d_{\mathbb{L}}(z, z')$ for all $z, z' \in \Lmod$~\cite{nickel2018lorentz}\ifpreprint\ (proved algebraically in Appendix~\ref{app:warped_product})\fi.
+Projecting $\Lmod$ embeddings via~\eqref{eq:lorentz_isometry} at ingestion eliminates the redundant time-like coordinate $z_0$ without losing exact geodesic distances or rankings; as shown in Theorem~\ref{thm:conformal_flip}(3), it also avoids exponential quantization error blowup on unbounded spatial norms $\|\tilde{z}\|_2$.
+
+\paragraph{Warped-Product Decomposition and Order-Isomorphic Polar Proxy.}
+Every $x \in \Bball$ decomposes into Euclidean radius $r_x = \|x\|_2 \in [0, 1/\sqrt{c})$ and unit spherical direction $u_x \in \Sunit$ ($u_0 = e_1$ at $r_x = 0$).
+Let $R_x = d_{\mathbb{B}}(0, x)$ denote geodesic radius from the origin and $\rho_x = \sqrt{c}\,R_x = 2\atanh(\sqrt{c}\,r_x)$ denote dimensionless geodesic depth, which satisfy the exact identities $\sinh\rho_x = \sqrt{c}\,r_x f_x$ and $\cosh\rho_x = c r_x^2 f_x + 1 = f_x - 1$.
+In coordinates $(R, u) \in (0, \infty) \times \Sunit$, $\Bball \setminus \{0\}$ is isometric to the warped-product manifold
+\begin{equation}
+  \begin{aligned}
+    \Bball \setminus \{0\} &\cong (0, \infty) \times_{\frac{1}{\sqrt{c}}\sinh(\sqrt{c}R)} \Sunit, \\
+    \mathrm{d}s^2 &= \mathrm{d}R^2 + \frac{1}{c}\sinh^2(\sqrt{c}R)\,\mathrm{d}\Omega_{D-1}^2,
+  \end{aligned}
+  \label{eq:warped_metric}
+\end{equation}
+where spherical fiber distances expand exponentially as $\frac{1}{\sqrt{c}}\sinh(\sqrt{c}R) = \frac{1}{2\sqrt{c}}e^{\rho}(1 - e^{-2\rho})$.
+Expanding $\|q - v\|_2^2 = (r_q - r_v)^2 + 2 r_q r_v(1 - \gamma_{qv})$ for spherical cosine $\gamma_{qv} = \langle u_q, u_v\rangle = \cos\theta_{qv} \in [-1, 1]$ yields the \emph{polar geodesic proxy}:
+\begin{equation}
+  P_{\mathbb{B}}(q, v) \triangleq \|q - v\|_2^2 f_q f_v = R(r_q, r_v) + W(r_q, r_v)\bigl(1 - \gamma_{qv}\bigr),
+  \label{eq:polar_proxy}
+\end{equation}
+where the radial discrepancy term and conformal angular weight are
+\begin{equation}
+  \begin{aligned}
+    R(r_q, r_v) &= (r_q - r_v)^2 f_q f_v, \\
+    W(r_q, r_v) &= 2 r_q r_v f_q f_v = \frac{2}{c}\sinh\rho_q \sinh\rho_v.
+  \end{aligned}
+  \label{eq:radial_conformal_weights}
+\end{equation}
+By the hyperbolic law of cosines, $\frac{c}{4}P_{\mathbb{B}}(q, v) = \sinh^2\!\bigl(\frac{\rho_q - \rho_v}{2}\bigr) + \sinh\rho_q\sinh\rho_v\sin^2\!\bigl(\frac{\theta_{qv}}{2}\bigr) = \sinh^2\!\bigl(\frac{\sqrt{c}}{2}d_{\mathbb{B}}(q, v)\bigr)$, so exact geodesic distance relates to $P_{\mathbb{B}}(q, v)$ through
+\begin{equation}
+  \begin{aligned}
+    d_{\mathbb{B}}(q, v)
+    &= \frac{1}{\sqrt{c}}\arccosh\!\left(1 + \frac{c}{2} P_{\mathbb{B}}(q, v)\right) \\
+    &= \frac{2}{\sqrt{c}}\asinh\!\left(\frac{1}{2}\sqrt{c\,P_{\mathbb{B}}(q, v)}\right).
+  \end{aligned}
+  \label{eq:proxy_to_geodesic}
+\end{equation}
+Because $z \mapsto \frac{2}{\sqrt{c}}\asinh\bigl(\frac{1}{2}\sqrt{c z}\bigr)$ is strictly increasing on $[0, \infty)$, $P_{\mathbb{B}}(q, v)$ is strictly order-isomorphic to $d_{\mathbb{B}}(q, v)$, deferring transcendental evaluations to the final $k$ returned neighbors.
+Furthermore, in the flat-curvature limit $c \to 0^+$, $f_x \to 2$ and $\frac{1}{4}P_{\mathbb{B}}(q, v) \to \|q - v\|_2^2$, recovering flat Euclidean and spherical geometry continuously.
+
+\subsection{Exact Two-Level Spherical SM Geometry and Decision Operators}
+\label{subsec:sm_decisions}
+
+\paragraph{Deterministic Conditional-Mean Two-Level {SM} Reconstruction.}
+In polar coordinates, $u_v \in \Sunit$ lies on the unit sphere independently of $r_v$.
+Following {\quiver}~\cite{xiao2026quiver}, training-free 2-bit {SM} encodes each coordinate $u_{v,i}$ ($i \in \{1,\dots,D\}$) into two packed bitplanes:
+a sign bit $s_{v,i} = \mathbb{I}[u_{v,i} \ge 0]$ and a strong-magnitude bit $m_{v,i} = \mathbb{I}[|u_{v,i}| > \tau_v]$ relative to the L1 mean threshold $\tau_v = \frac{1}{D}\sum_{j=1}^D |u_{v,j}|$, with strong-bit count $s_v = \sum_{i=1}^D m_{v,i}$.
+Partitioning $\{1,\dots,D\}$ into weak indices $I_{0,v} = \{i : m_{v,i} = 0\}$ ($|I_{0,v}| = D - s_v$) and strong indices $I_{1,v} = \{i : m_{v,i} = 1\}$ ($|I_{1,v}| = s_v$) defines conditional magnitude means $a_v = \frac{1}{D - s_v}\sum_{i \in I_{0,v}} |u_{v,i}|$ ($0$ if $s_v = D$), $b_v = \frac{1}{s_v}\sum_{i \in I_{1,v}} |u_{v,i}|$ ($0$ if $s_v = 0$), and step $\delta_v = b_v - a_v \ge 0$.
+
+\begin{lemma}[Deterministic Two-Level {SM} Pythagorean Identity]
+\label{lem:sm_pythagorean}
+For any $u_v \in \Sunit$, let $\hat{u}_v \in \R^D$ be the conditional-mean two-level vector $\hat{u}_{v,i} = \sgn(u_{v,i})(a_v + \delta_v m_{v,i})$ (setting $\sgn(0) = +1$).
+Then, with zero distributional assumptions on $u_v$, $(a_v, \delta_v)$ uniquely minimizes $\|u_v - \tilde{u}\|_2^2$ over all two-level vectors sharing bitplanes $(s_v, m_v)$, and satisfies
+\begin{equation}
+  \begin{aligned}
+    \langle u_v, \hat{u}_v\rangle &= (D - s_v)a_v^2 + s_v b_v^2 \\
+    &= \|\hat{u}_v\|_2^2 \triangleq \sigma_v^2 \in (0, 1], \\
+    \|u_v - \hat{u}_v\|_2^2 &= 1 - \sigma_v^2.
+  \end{aligned}
+  \label{eq:sm_pythagorean}
+\end{equation}
+Moreover, for two two-level codes $\hat{u}_q, \hat{u}_v$, let $p_{\oplus} = \popcnt(\bar{x})$, $p_{10} = \popcnt(\bar{x} \wedge m_q)$, $p_{01} = \popcnt(\bar{x} \wedge m_v)$, $p_{11} = \popcnt(\bar{x} \wedge m_q \wedge m_v)$, and $n_{11} = \popcnt(m_q \wedge m_v)$ where $\bar{x} = \neg(s_q \oplus s_v)$ marks sign agreement.
+Then $\langle \hat{u}_q, \hat{u}_v\rangle = a_q a_v(2 p_{\oplus} - D) + a_q \delta_v(2 p_{01} - s_v) + \delta_q a_v(2 p_{10} - s_q) + \delta_q \delta_v(2 p_{11} - n_{11})$ exactly\ifpreprint\ (proof in Appendix~\ref{app:sm_algebra})\fi.
+\end{lemma}
+
+\begin{proof}[Proof Sketch]
+Because $\sgn(u_{v,i}) u_{v,i} = |u_{v,i}|$, splitting $\langle u_v, \hat{u}_v\rangle$ over $I_{0,v}$ and $I_{1,v}$ gives $a_v \sum_{i \in I_{0,v}} |u_{v,i}| + b_v \sum_{i \in I_{1,v}} |u_{v,i}| = (D - s_v)a_v^2 + s_v b_v^2 = \|\hat{u}_v\|_2^2$, whence $\langle u_v - \hat{u}_v, \hat{u}_v\rangle = 0$ and $\|u_v - \hat{u}_v\|_2^2 = 1 - \sigma_v^2$.
+Expanding $\sgn_q \sgn_v = 2\bar{x}_i - 1$ over $\{1, m_q, m_v, m_q m_v\}$ yields the five-popcount identity.
+\end{proof}
+
+When scalar parameters $(a_v, \delta_v)$ are further compressed to canonical integer levels $\tilde{q}_{\mathrm{SM}}(u_v)_i = \sgn(u_{v,i})(1 + 2 m_{v,i}) \in \{\pm 1, \pm 3\}$ ($\|\tilde{q}_{\mathrm{SM}}(u_v)\|_2 = \sqrt{D + 8 s_v}$) during ultra-compact storage, \rquiver{} applies endpoint-preserving rational calibration $\hat{\gamma}_{\mathrm{cal}}(c) = \frac{c}{\kappa_{\mathrm{cal}} + (1 - \kappa_{\mathrm{cal}})c^2}$ ($\kappa_{\mathrm{cal}} = 0.80$, fixing $0$ and $\pm 1$) to correct Jensen shrinkage on normalized inner products $c = \langle \hat{u}_q, \hat{u}_v\rangle / (\sigma_q \sigma_v)$.
+
+\paragraph{Problem Statement and Discrete Comparison Operators.}
+Given $N$ database points $\mathcal{X} \subset \Bball$ and query $q \in \Bball$, exact top-$k$ retrieval returns $\mathcal{N}_k(q)$ minimizing $d_{\mathbb{B}}(q, v)$, and {ANN} accuracy is evaluated via $\operatorname{Recall@}k = |\widehat{\mathcal{N}}_k(q) \cap \mathcal{N}_k(q)| / k$ against throughput ({QPS}) and p99 latency.
+Quantized proximity-graph construction and search depend not on point-wise metric reconstruction error $|\widehat{P}_{\mathbb{B}} - P_{\mathbb{B}}|$, but on sign preservation of two binary comparison operators~\cite{xiao2026decisions}:
+\begin{enumerate}
+  \item \emph{Shared-query ranking} during beam search: for query $q$ and candidates $x, y \in \mathcal{X}$, deciding the sign of
+  \begin{equation}
+    \Psi_{\mathrm{rank}}(q; x, y) \triangleq P_{\mathbb{B}}(q, x) - P_{\mathbb{B}}(q, y);
+    \label{eq:psi_rank}
+  \end{equation}
+  \item \emph{Shared-target diversity pruning} during {Vamana} edge selection~\cite{subramanya2019diskann}: for vertex $u$, selected neighbor $w$, and candidate $v$ under geodesic slack $\alpha > 1$, deciding whether
+  \begin{equation}
+    \Psi_{\mathrm{prune}}(u, w, v; \alpha) \triangleq \alpha\,d_{\mathbb{B}}(w, v) - d_{\mathbb{B}}(u, v) \le 0.
+    \label{eq:psi_prune}
+  \end{equation}
+\end{enumerate}
+For any noisy estimator $\widehat{\Psi} = \Psi + \Delta\widehat{\Psi}$, the probability of a decision flip is controlled by its \emph{margin-to-noise ratio}~\cite{xiao2026decisions}:
+\begin{equation}
+  \MNR(\widehat{\Psi}) \triangleq \frac{|\E[\widehat{\Psi}]|}{\sqrt{\Var(\Delta\widehat{\Psi})}}.
+  \label{eq:mnr_def}
+\end{equation}
+Section~\ref{sec:theory} characterizes how negative curvature reshapes both $\Var(\Delta\widehat{\Psi}_{\mathrm{rank}})$ and the geometry of $\Psi_{\mathrm{prune}}$.
