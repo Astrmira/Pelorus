@@ -78,3 +78,23 @@ required-features = ["research"]
 name = "benchmark_distribution_adaptation"
 path = "research/benchmarks/distribution_adaptation.rs"
 required-features = ["research"]
+
+[[example]]
+name = "benchmark_rerank_storage"
+path = "research/benchmarks/rerank_storage.rs"
+required-features = ["research"]
+
+[[example]]
+name = "benchmark_storage_sweep"
+path = "research/benchmarks/storage_sweep.rs"
+required-features = ["research"]
+
+[[example]]
+name = "benchmark_storage_profile"
+path = "research/benchmarks/storage_profile.rs"
+required-features = ["research"]
+
+[[example]]
+name = "benchmark_variable_curvature_50k"
+path = "research/benchmarks/variable_curvature_50k.rs"
+required-features = ["research"]

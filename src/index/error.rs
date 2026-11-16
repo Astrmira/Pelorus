@@ -15,6 +15,7 @@ pub enum Error {
     InvalidBuildConfig(&'static str),
     InvalidSearchConfig(&'static str),
     InvalidMetric(&'static str),
+    InvalidRerankConfig(&'static str),
     OutsideManifold {
         index: usize,
     },
@@ -47,6 +48,7 @@ impl Display for Error {
             Self::InvalidBuildConfig(reason) => write!(formatter, "构建配置无效：{reason}"),
             Self::InvalidSearchConfig(reason) => write!(formatter, "搜索配置无效：{reason}"),
             Self::InvalidMetric(reason) => write!(formatter, "几何配置无效：{reason}"),
+            Self::InvalidRerankConfig(reason) => write!(formatter, "重排配置无效：{reason}"),
             Self::OutsideManifold { index } => write!(formatter, "第 {index} 条向量不在开双曲球内"),
             Self::DistanceOverflow => write!(formatter, "双曲距离超出结果分数的有限数范围"),
             Self::DuplicateId(id) => write!(formatter, "ID 重复：{id}"),

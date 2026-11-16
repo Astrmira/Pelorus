@@ -24,7 +24,12 @@ thread_local! { pub(crate) static TRACE: RefCell<Option<QueryTrace>> = const { R
 pub(crate) static STAGE_PROFILE_ACTIVE: AtomicBool = AtomicBool::new(false);
 #[cfg(feature = "research")]
 thread_local! { pub(crate) static STAGE_PROFILE: RefCell<SearchStageProfile> = const { RefCell::new(SearchStageProfile {
-    router_seed_ns: 0, beam_nav_ns: 0, asym_gate_ns: 0, exact_rerank_ns: 0,
+    upper_greedy_ns: 0, router_seed_ns: 0, beam_nav_ns: 0,
+    asym_gate_ns: 0, exact_rerank_ns: 0, candidate_select_ns: 0,
+    rerank_score_ns: 0, rerank_selected_count: 0, reranked_count: 0,
+    rerank_radial_rejections: 0, navigation_passes: 0,
+    main_expansion_calls: 0, horizon_expansion_calls: 0,
+    stage05_candidates: 0, ef_nav: 0, router_seeds: 0,
 }) }; }
 #[cfg(feature = "research")]
 #[inline]

@@ -5,8 +5,11 @@ pub(crate) const FILE_MAGIC: &[u8; 8] = b"QUIVERIX";
 pub(crate) const FILE_VERSION: u32 = 3;
 pub(crate) const HEADER_LEN: usize = 8 + 4 + 8 + 4;
 impl Index {
-    /// 将完整 owned 索引保存为带校验和的单文件，并以临时文件原子替换目标。
+    /// 保存索引，默认内存 FP32 使用历史单文件，压缩或映射模式发布完整快照。
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
+        if self.rerank.is_some() || self.storage_mode == crate::StorageMode::Mmap {
+            return self.save_snapshot(path);
+        }
         let mut payload = Vec::new();
         // v1 记录余弦，v2 记录精确双曲距离，v3 额外记录几何量化导航模式（1=标准 SM，2=切锥正交残差 SM）。
         let version = match self.metric {
@@ -39,8 +42,7 @@ impl Index {
         }
         for (slot, &active) in self.active.iter().enumerate() {
             if active {
-                let start = slot * self.dimensions;
-                for &value in &self.vectors[start..start + self.dimensions] {
+                for &value in self.vectors.row(slot, self.dimensions) {
                     payload.extend_from_slice(&value.to_bits().to_le_bytes());
                 }
             }
@@ -68,8 +70,12 @@ impl Index {
         Ok(())
     }
 
-    /// 从 owned 单文件加载并校验数据，然后重建内存图。
+    /// 自动识别历史单文件或快照入口，并恢复为内存模式。
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
+        Self::open(path, crate::StorageMode::Memory)
+    }
+
+    pub(super) fn load_legacy(path: impl AsRef<Path>) -> Result<Self> {
         let mut bytes = Vec::new();
         std::fs::File::open(path)?.read_to_end(&mut bytes)?;
         if bytes.len() < HEADER_LEN || &bytes[..8] != FILE_MAGIC {

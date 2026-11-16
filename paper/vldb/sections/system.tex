@@ -48,13 +48,13 @@ Once hardware resolves the virtual-to-physical translation for \texttt{HotSmHead
 Even within one $4$\,KiB page, fetching full 2-bit {SM} bitplanes ($192$\,B = $3$ cache lines at $D=768$; $384$\,B = $6$ cache lines at $D=1536$) for every unvisited neighbor incurs unnecessary memory traffic once the beam tightens around $q$.
 \rquiver{} first prefetches only the single 64-byte \texttt{HotSmHeader} cache line (consuming just one hardware Line Fill Buffer entry per neighbor) and executes a two-stage gate against the current $L$-th beam bound $\theta_{\mathrm{beam}}$:
 \begin{enumerate}
-  \item \textbf{Stage-1a (Radial Lower-Bound Gate, $0$ extra cache lines):}
-  Using $(r_v, f_v)$ from \texttt{HotSmHeader} (\texttt{0x00..0x1F}), if $P_{\mathrm{rad}}(r_q, r_v) = (r_q - r_v)^2 f_q f_v > \theta_{\mathrm{beam}}$ (Proposition~\ref{prop:geodesic_apex}(1)), $v$ is discarded by the radial bound. \ifpreprint FP32 header perturbations follow Appendix~\ref{app:scalar_rounding}.\fi
+  \item \textbf{Stage-1a (Exact Radial Lower-Bound Gate, $0$ extra cache lines):}
+  Using $(r_v, f_v)$ from \texttt{HotSmHeader} (\texttt{0x00..0x1F}), if $P_{\mathrm{rad}}(r_q, r_v) = (r_q - r_v)^2 f_q f_v > \theta_{\mathrm{beam}}$ (Proposition~\ref{prop:geodesic_apex}(1)), $v$ is discarded by the lossless radial bound. \ifpreprint FP32 header perturbations follow Appendix~\ref{app:scalar_rounding}.\fi
 
   \item \textbf{Stage-1b (Binomial-Stabilized \texttt{SymSketch256} Gate, same $64$\,B header line):}
   The upper half of \texttt{HotSmHeader} (\texttt{0x20..0x3F}) stores a $256$-bit ($32$\,B) strided sign sketch.
-  Computing the 256-bit Hamming distance $H \in \{0, \dots, 256\}$ against $q$'s sketch via four \texttt{u64} \texttt{XOR}+\texttt{POPCNT} instructions indexes two compile-time lookup tables ($2$\,KB total in L1): the exact arcsine table $\hat{\gamma}_{256} = \texttt{COS\_PI\_256}[H] = \cos(\pi H / 256)$ and the binomial standard-deviation ratio table $\rho_{\mathrm{std}}(H) = \texttt{SKETCH256\_STD\_RATIO}[H] = \max(1, \sigma_{\mathrm{sk}}(H/256) / \sigma_{\mathrm{sk}}(48/256))$ derived in Proposition~\ref{prop:asym_cj_gate}(3).
-  Forming the variance-stabilized optimistic cosine bound $\hat{\gamma}_{\mathrm{upper}} = \min(1, \hat{\gamma}_{256} + \Delta_0 \cdot \rho_{\mathrm{std}}(H))$ yields optimistic proxy $\widehat{P}_{\mathbb{B}}^{\mathrm{opt}}(q, v) = R(r_q, r_v) + W(r_q, r_v)(1 - \hat{\gamma}_{\mathrm{upper}})$; whenever $\widehat{P}_{\mathbb{B}}^{\mathrm{opt}}(q, v) > \theta_{\mathrm{beam}}$ (for non-residual vertices once the beam fills), $v$ is pruned without ever prefetching or reading its trailing bitplane cache lines.
+  Computing the 256-bit Hamming distance $H \in \{0, \dots, 256\}$ against $q$'s sketch via four \texttt{u64} \texttt{XOR}+\texttt{POPCNT} instructions indexes two compile-time lookup tables ($2$\,KB total in L1): the exact arcsine table $\hat{\gamma}_{256} = \texttt{COS\_PI\_256}[H] = \cos(\pi H / 256)$ and the binomial-model standard-deviation ratio table $\rho_{\mathrm{std}}(H) = \texttt{SKETCH256\_STD\_RATIO}[H] = \max(1, \sigma_{\mathrm{sk}}(H/256) / \sigma_{\mathrm{sk}}(48/256))$ derived in Proposition~\ref{prop:asym_cj_gate}(3).
+  Forming the variance-stabilized optimistic cosine bound $\hat{\gamma}_{\mathrm{upper}} = \min(1, \hat{\gamma}_{256} + \Delta_0 \cdot \rho_{\mathrm{std}}(H))$ yields optimistic proxy $\widehat{P}_{\mathbb{B}}^{\mathrm{opt}}(q, v) = R(r_q, r_v) + W(r_q, r_v)(1 - \hat{\gamma}_{\mathrm{upper}})$; whenever $\widehat{P}_{\mathbb{B}}^{\mathrm{opt}}(q, v) > \theta_{\mathrm{beam}}$ (for non-residual vertices once the beam fills), $v$ is pruned without prefetching or reading its trailing bitplane cache lines.
 \end{enumerate}
 Scaling the sketch margin by $\rho_{\mathrm{std}}(H)$ keeps tight filtering ($1.0\times$) for high-similarity neighbors ($H \le 48$) while automatically widening to $2.265\times$ at $H=115$ and a maximum of $2.306\times$ at $H=128$ to prevent premature pruning on moderate-angle manifolds.
 In our controlled three-seed ablation on {Cohere-1M}, Stage-1a and \texttt{SymSketch256} skip $57.6\%$ of full bitplane loads, raising single-thread $99\%$-recall QPS from $1{,}752$ ({SoA}) to $1{,}909$ (\texttt{HotSmPage}) and $2{,}071$ (\texttt{HotSmPage} + \texttt{SymSketch256}, $+18.2\%$ total).
@@ -81,11 +81,11 @@ Let $K(a,b)$ denote this calibrated symmetric scorer and $A(q,b)$ the asymmetric
  \EndIf
  \If{a residual slot is cached, or $|\alpha_{q,c}|\ge0.20$, $\beta_{q,c}>10^{-6}$ and a free slot exists}
   \State Reuse or materialize unit $\tilde r_{q,c}$, its bitplanes, and SM parameters
-  \State $t\gets K(\tilde r_{q,c},\tilde r_v)$ for hops, $A(\tilde r_{q,c},\tilde r_v)$ for refinement
-  \State \Return $\operatorname{clip}_{[-1,1]}(\alpha_{q,c}\alpha_v+\beta_{q,c}\beta_v t)$
+  \State $t_{\mathrm{res}}\gets K(\tilde r_{q,c},\tilde r_v)$ for hops, $A(\tilde r_{q,c},\tilde r_v)$ for refinement
+  \State \Return $\operatorname{clip}_{[-1,1]}(\alpha_{q,c}\alpha_v+\beta_{q,c}\beta_v t_{\mathrm{res}})$
  \Else
-  \State $t\gets K(u_q,\tilde r_v)$ for hops, $A(u_q,\tilde r_v)$ for refinement
-  \State \Return $\operatorname{clip}_{[-1,1]}(\alpha_{q,c}\alpha_v+\beta_v t)$
+  \State $t_{\mathrm{uq}}\gets K(u_q,\tilde r_v)$ for hops, $A(u_q,\tilde r_v)$ for refinement \Comment{$\tilde r_v\perp\mu_c\Rightarrow\langle u_q,\tilde r_v\rangle=\beta_{q,c}\langle\tilde r_{q,c},\tilde r_v\rangle$}
+  \State \Return $\operatorname{clip}_{[-1,1]}(\alpha_{q,c}\alpha_v+\beta_v t_{\mathrm{uq}})$
  \EndIf
  \end{algorithmic}
 \end{algorithm}
@@ -118,7 +118,7 @@ Once beam search converges to a pool $\mathcal{P}$ of size $L$, fetching all $L$
   For residual-cone pool members, \textsc{Stage-0.5} reuses the cone cache from Algorithm~\ref{alg:residual_score} and lazily builds a fixed-point query array for each materialized residual. It applies $A$ in the same materialized or global-query branch.
 
   \item \textbf{\textsc{CJ-Gate} Observable-Margin Plateau Expansion:}
-  Sort $\mathcal P$ by asymmetric proxy and let $B_0=\min(B,L)$, $j_{\mathrm{ref}}=\min(k,B_0)$, $p_{\mathrm{ref}}=\widehat P_{(j_{\mathrm{ref}})}$. Compute one reference uncertainty $s_{\mathrm{ref}}$ from~\eqref{eq:cj_sigma}, using $\kappa_{\mathrm{SM}}=0.221$. A materialized cone uses attenuation $\beta_{q,c}\beta_v$, a global-query/residual branch uses $\beta_v$, and a global code uses 1.
+  Sort $\mathcal P$ by asymmetric proxy and let $B_0=\min(B,L)$, $j_{\mathrm{ref}}=\min(k,B_0)$, $p_{\mathrm{ref}}=\widehat P_{(j_{\mathrm{ref}})}$. Compute one reference uncertainty $s_{\mathrm{ref}}$ from~\eqref{eq:cj_sigma}, using empirical $\kappa_{\mathrm{SM}}=0.221$ to target near-tie plateaus in the $\ge 99.5\%$ high-recall regime. A materialized cone uses attenuation $\beta_{q,c}\beta_v$, a global-query/residual branch uses $\beta_v$, and a global code uses 1.
   If $B_0<L$ and $\widehat P_{(B_0)}-p_{\mathrm{ref}}\le z s_{\mathrm{ref}}$, extend the rerank prefix while
   \begin{equation}
    \widehat P_{(j)}\le p_{\mathrm{ref}}+(z+0.8)s_{\mathrm{ref}},\qquad

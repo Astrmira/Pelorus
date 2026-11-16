@@ -11,7 +11,7 @@ impl QuIVer {
         factor: f64,
         config: &SearchConfig,
         quantized: bool,
-    ) -> SearchStageProfile {
+    ) -> crate::Result<SearchStageProfile> {
         struct ProfGuard;
         impl Drop for ProfGuard {
             fn drop(&mut self) {
@@ -21,9 +21,9 @@ impl QuIVer {
         STAGE_PROFILE.with(|p| *p.borrow_mut() = SearchStageProfile::default());
         STAGE_PROFILE_ACTIVE.store(true, AtomicOrdering::Relaxed);
         let _guard = ProfGuard;
-        let _ = self.search_native(space, query, factor, config, quantized);
+        let _ = self.search_native(space, query, factor, config, quantized)?;
         STAGE_PROFILE_ACTIVE.store(false, AtomicOrdering::Relaxed);
-        STAGE_PROFILE.with(|p| *p.borrow())
+        Ok(STAGE_PROFILE.with(|p| *p.borrow()))
     }
 
     /// 在实际搜索路径上采集 V、C、F、R 集合，插桩仅在诊断调用期间启用。
@@ -36,7 +36,7 @@ impl QuIVer {
         config: &SearchConfig,
         quantized: bool,
         truth_ids: &[u64],
-    ) -> SearchLossStats {
+    ) -> crate::Result<SearchLossStats> {
         struct TraceGuard;
         impl Drop for TraceGuard {
             fn drop(&mut self) {
@@ -49,7 +49,7 @@ impl QuIVer {
         TRACE.with(|t| *t.borrow_mut() = Some(QueryTrace::default()));
         TRACE_ACTIVE.store(true, AtomicOrdering::Relaxed);
         let _guard = TraceGuard;
-        let result = self.search_native(space, query, factor, config, quantized);
+        let result = self.search_native(space, query, factor, config, quantized)?;
         let trace = TRACE.with(|t| t.borrow_mut().take().unwrap());
         TRACE_ACTIVE.store(false, AtomicOrdering::Relaxed);
         let truth_internal: std::collections::HashSet<_> = truth_ids
@@ -69,7 +69,7 @@ impl QuIVer {
         }
         // 最终候选包含已评分节点，精排产生的读取不扩大全搜索集合定义。
         scored.extend(trace.beam.iter().copied());
-        SearchLossStats {
+        Ok(SearchLossStats {
             hits_returned: result
                 .iter()
                 .filter(|(id, _)| truth_ids.contains(id))
@@ -87,6 +87,6 @@ impl QuIVer {
             bound_rejections: trace.bound_rejections,
             header_checks: trace.header_checks,
             header_rejections: trace.header_rejections,
-        }
+        })
     }
 }

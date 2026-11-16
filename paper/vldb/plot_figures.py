@@ -230,7 +230,7 @@ def comparison_table(source_name="baseline_summary.csv", output_name="baseline_c
             lines.extend([
                 r"\par\vspace{5pt}",
                 r"\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}llrrrrr@{}}",
-                r"\multicolumn{7}{@{}l}{\textbf{(b) 24-thread QPS}} \\",
+                r"\multicolumn{7}{@{}l}{\textbf{(b) 24-thread QPS (queries/s)}} \\",
                 r"\toprule",
                 r"\textbf{Dataset} & \textbf{Method} & \textbf{$\ge90\%$} & \textbf{$\ge95\%$} & \textbf{$\ge98\%$} & \textbf{$\ge99\%$} & \textbf{$\ge99.5\%$} \\",
                 r"\midrule",

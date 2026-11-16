@@ -310,7 +310,7 @@ impl QuIVer {
         factor: f64,
         config: &SearchConfig,
         quantized: bool,
-    ) -> Vec<(u64, f64)> {
+    ) -> crate::Result<Vec<(u64, f64)>> {
         #[cfg(feature = "research")]
         let speed_cfg = execution_config();
         #[cfg(feature = "research")]
@@ -336,9 +336,19 @@ impl QuIVer {
         if fast_kernels && quantized {
             SCRATCH.with(|c| c.borrow_mut().last_query_radius = -1.0);
         }
+        #[cfg(feature = "research")]
+        let stage_prof = STAGE_PROFILE_ACTIVE.load(AtomicOrdering::Relaxed);
+        #[cfg(feature = "research")]
+        let greedy_start = stage_prof.then(std::time::Instant::now);
         let mut entry = self.entry_point;
         for layer in (1..=self.max_level).rev() {
             entry = self.native_greedy(space, query, factor, entry, layer, quantized);
+        }
+        #[cfg(feature = "research")]
+        if let Some(start) = greedy_start {
+            STAGE_PROFILE.with(|p| {
+                p.borrow_mut().upper_greedy_ns = start.elapsed().as_nanos() as u64;
+            });
         }
         let mut candidates = self.native_beam(
             space,
@@ -350,6 +360,8 @@ impl QuIVer {
             false,
             quantized,
         );
+        #[cfg(feature = "research")]
+        let select_start = stage_prof.then(std::time::Instant::now);
         if !quantized {
             candidates.sort_unstable_by(|a, b| {
                 a.0.cmp(&b.0)
@@ -426,6 +438,15 @@ impl QuIVer {
         let eff_limit = base_limit;
 
         #[cfg(feature = "research")]
+        if let Some(start) = select_start {
+            STAGE_PROFILE.with(|p| {
+                let mut p = p.borrow_mut();
+                p.candidate_select_ns = start.elapsed().as_nanos() as u64;
+                p.rerank_selected_count = eff_limit;
+            });
+        }
+
+        #[cfg(feature = "research")]
         if trace_slow {
             trace_query(|t| {
                 t.beam.extend(candidates.iter().map(|c| c.1));
@@ -433,8 +454,8 @@ impl QuIVer {
                     .extend(candidates.iter().take(eff_limit).map(|c| c.1));
             });
         }
-        if !quantized {
-            return candidates
+        if !quantized && space.rerank.is_none() {
+            return Ok(candidates
                 .into_iter()
                 .take(eff_limit)
                 .take(config.top_k)
@@ -444,14 +465,18 @@ impl QuIVer {
                         poincare_distance(distance.0, space.curvature),
                     )
                 })
-                .collect();
+                .collect());
         }
         // 量化导航精排：优先使用 PolarRouter 32B 热元数据（或 GeometryCode）执行精确径向 Cauchy-Schwarz 下界预滤，
         // 并批量预取通过径向检验的冷存向量。
         #[cfg(feature = "research")]
-        let t_rerank_start = STAGE_PROFILE_ACTIVE
-            .load(AtomicOrdering::Relaxed)
-            .then(std::time::Instant::now);
+        let t_rerank_start = stage_prof.then(std::time::Instant::now);
+        #[cfg(feature = "research")]
+        let mut score_ns = 0u64;
+        #[cfg(feature = "research")]
+        let mut scored = 0usize;
+        #[cfg(feature = "research")]
+        let mut radial_rejections = 0usize;
         let query_radius = if fast_kernels {
             let cached = SCRATCH.with(|c| c.borrow().last_query_radius);
             if cached >= 0.0 {
@@ -466,18 +491,34 @@ impl QuIVer {
         let mut top_heap: BinaryHeap<(Distance, u64, u32)> =
             BinaryHeap::with_capacity(config.top_k + 1);
         let rerank_slice = &candidates[..eff_limit];
-        for (idx_pos, &(_, node)) in rerank_slice.iter().enumerate() {
-            if idx_pos + 2 < rerank_slice.len() {
-                let ahead = rerank_slice[idx_pos + 2].1 as usize;
-                space.prefetch_vector(self.slot_indices[ahead]);
+        let mut decode_buffer = crate::storage::RerankScratch::default();
+        let direct = space.rerank.and_then(|store| store.direct.as_ref());
+        let prefetch_window = direct.map_or(2, |reader| reader.config.prefetch_window);
+        if prefetch_window > 0 {
+            for &(_, node) in rerank_slice.iter().take(prefetch_window) {
+                space.prefetch_rerank(self.slot_indices[node as usize]);
             }
-            if top_heap.len() >= config.top_k {
+        }
+        let use_radial_bound = space.rerank.is_none_or(|store| {
+            store.config == crate::RerankConfig::default()
+                || store.config.representation == crate::RerankRepresentation::Polar
+        });
+        for (idx_pos, &(_, node)) in rerank_slice.iter().enumerate() {
+            if prefetch_window > 0 && idx_pos + prefetch_window < rerank_slice.len() {
+                let ahead = rerank_slice[idx_pos + prefetch_window].1 as usize;
+                space.prefetch_rerank(self.slot_indices[ahead]);
+            }
+            if use_radial_bound && top_heap.len() >= config.top_k {
                 let bound = top_heap.peek().unwrap().0;
                 let meta_opt = router.and_then(|r| r.node_meta(node as usize));
                 if let Some(meta) = meta_opt {
                     if Distance(meta.radial_lower_bound_fast(query_radius, factor, radial_bound_on))
                         > bound
                     {
+                        #[cfg(feature = "research")]
+                        if stage_prof {
+                            radial_rejections += 1;
+                        }
                         #[cfg(feature = "research")]
                         if trace_slow {
                             trace_query(|t| t.bound_rejections += 1);
@@ -491,20 +532,29 @@ impl QuIVer {
                         1.0
                     };
                     if Distance(radial_lb) > bound {
+                        #[cfg(feature = "research")]
+                        if stage_prof {
+                            radial_rejections += 1;
+                        }
                         continue;
                     }
                 }
             }
-            let exact = (
-                Distance(space.proxy_fast(
-                    query,
-                    factor,
-                    self.slot_indices[node as usize],
-                    trace_slow,
-                )),
-                self.ids[node as usize],
-                node,
-            );
+            #[cfg(feature = "research")]
+            let score_start = stage_prof.then(std::time::Instant::now);
+            let distance = space.rerank_proxy(
+                query,
+                factor,
+                self.slot_indices[node as usize],
+                trace_slow,
+                &mut decode_buffer,
+            )?;
+            #[cfg(feature = "research")]
+            if let Some(start) = score_start {
+                score_ns += start.elapsed().as_nanos() as u64;
+                scored += 1;
+            }
+            let exact = (Distance(distance), self.ids[node as usize], node);
             if top_heap.len() < config.top_k {
                 top_heap.push(exact);
             } else if exact < *top_heap.peek().unwrap() {
@@ -534,8 +584,14 @@ impl QuIVer {
             .collect();
         #[cfg(feature = "research")]
         if let Some(t3) = t_rerank_start {
-            STAGE_PROFILE.with(|p| p.borrow_mut().exact_rerank_ns = t3.elapsed().as_nanos() as u64);
+            STAGE_PROFILE.with(|p| {
+                let mut p = p.borrow_mut();
+                p.exact_rerank_ns = t3.elapsed().as_nanos() as u64;
+                p.rerank_score_ns = score_ns;
+                p.reranked_count = scored;
+                p.rerank_radial_rejections = radial_rejections;
+            });
         }
-        out
+        Ok(out)
     }
 }

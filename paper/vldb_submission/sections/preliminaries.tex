@@ -59,7 +59,7 @@ The main hop scorer uses Lemma~\ref{lem:sm_pythagorean}'s five-popcount product 
   \hat{\gamma}_{\mathrm{sym}} = \frac{t}{\kappa + (1 - \kappa)t^2},
   \label{eq:sm_calibration}
 \end{equation}
-while canonical codes $\sgn(u_i)(1 + m_i) \in \{\pm 1, \pm 2\}$ with inverse norm $(D + 3 s_v)^{-1/2}$ supply legacy scoring paths.
+while canonical codes $\sgn(u_i)(1 + m_i) \in \{\pm 1, \pm 2\}$ with inverse norm $(D + 3 s_v)^{-1/2}$ supply legacy scoring paths. For fixed $\kappa \in [0.5, 1]$, $g_\kappa(t) = t / (\kappa + (1 - \kappa)t^2)$ is strictly increasing on $[-1, 1]$ ($g'_\kappa(t) = [\kappa - (1 - \kappa)t^2] / [\kappa + (1 - \kappa)t^2]^2 > 0$ on $(-1, 1)$), preserving rank across equal-$\sigma_v$ candidates while calibrating hop scores ($\sigma_v$-dependent $\kappa$) ahead of \textsc{Stage-0.5}'s exact orthogonal projection.
 
 \paragraph{Problem Statement and Comparison Operators.}
 Given $\mathcal{X} \subset \Bball$ ($|\mathcal{X}| = N$) and query $q \in \Bball$, {ANN} search returns $\widehat{\mathcal{N}}_k(q)$ maximizing $\operatorname{Recall@}k = |\widehat{\mathcal{N}}_k(q) \cap \mathcal{N}_k(q)| / k$ against {QPS} and p99 latency.

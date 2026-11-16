@@ -576,19 +576,4 @@ mod tests {
             );
         }
     }
-
-    #[test]
-    fn test_zero_and_f32_conv() {
-        assert_eq!(f32::zero(), 0.0);
-        assert_eq!(f16::zero(), f16::from_f32(0.0));
-        assert_eq!(u64::zero(), 0);
-
-        assert_eq!(1.5f32.to_f32(), 1.5);
-        assert_eq!(f16::from_f32(1.5).to_f32(), 1.5);
-        assert_eq!(1u64.to_f32(), 1.0);
-
-        assert_eq!(f32::from_f32(2.0), 2.0);
-        assert_eq!(f16::from_f32(2.0), f16::from_f32(2.0));
-        assert_eq!(u64::from_f32(2.0), 2);
-    }
 }

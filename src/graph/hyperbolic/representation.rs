@@ -87,7 +87,6 @@ impl QuIVer {
     }
 
     /// 预构建 768D 单页对齐 256B 合表热节点记录（`HotSmStore`），可选释放旧分离缓冲以计量真实常驻内存，返回物化耗时（秒）。
-    #[cfg(feature = "research")]
     pub(crate) fn prepare_colocated_hot_store(
         &mut self,
         space: &NativeSpace<'_>,

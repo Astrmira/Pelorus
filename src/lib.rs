@@ -14,12 +14,19 @@ mod graph;
 mod index;
 mod metric;
 mod quantization;
+mod storage;
 mod vector;
 
 pub use config::{BuildConfig, SearchConfig};
 pub use geometry::PoincareNavigation;
 pub use index::{Error, Index, Result};
 pub use metric::Metric;
+pub use storage::{
+    RerankConfig, RerankPrecision, RerankRepresentation, ScalarQuantization, SsdCacheConfig,
+    SsdIoDriver, SsdIoStats, StorageMode, VectorStorageStats,
+};
 #[cfg(feature = "research")]
 pub mod research;
+#[cfg(feature = "research")]
+mod var_curvature;
 pub(crate) use vector::VectorType;

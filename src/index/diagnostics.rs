@@ -20,7 +20,6 @@ impl Index {
     }
 
     /// 预构建单页对齐热节点合表，回收分离数组后继续支持读取及增量写入。
-    #[cfg(feature = "research")]
     pub fn prepare_colocated_hot_store(&mut self, reclaim_split: bool) -> Result<f64> {
         let Metric::Poincare { curvature } = self.metric else {
             return Err(Error::InvalidSearchConfig("单页合表仅支持双曲索引"));
@@ -30,9 +29,12 @@ impl Index {
                 "当前维度的合表记录无法容纳于单页",
             ));
         }
+        let (vectors, delta) = self.vectors.slices();
         let secs = self.graph.prepare_colocated_hot_store(
             &NativeSpace {
-                vectors: &self.vectors,
+                vectors,
+                delta,
+                rerank: None,
                 boundary_factors: &self.boundary_factors,
                 dimensions: self.dimensions,
                 curvature,
@@ -51,8 +53,9 @@ impl Index {
         if self.metric == Metric::Cosine {
             return Err(Error::InvalidSearchConfig("方向对照仅支持双曲索引"));
         }
-        self.graph
-            .prepare_direction_representation(&self.vectors, mode);
+        let data = self.vectors.to_owned();
+        let (base, _) = data.slices();
+        self.graph.prepare_direction_representation(base, mode);
         Ok(())
     }
 

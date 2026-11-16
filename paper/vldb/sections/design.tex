@@ -21,26 +21,26 @@ For each vertex $v \in \{0, \dots, N-1\}$, \rquiver{} stores a fixed 32-byte pol
   \item \emph{Conditional-mean two-level {SM} scalars (12\,B):} weak-coordinate mean $a_v$, level step $\delta_v = b_v - a_v$, and reconstructed two-level norm $\sigma_v = \|\hat{u}_v\|_2$ in FP32 (Lemma~\ref{lem:sm_pythagorean}).
   \item \emph{Bitpacked count/cone tag and axial/norm scalar (8\,B):} a 32-bit word packing the 20-bit strong-magnitude count $s_v$ with a 12-bit residual cone tag ($\text{cone\_id}$, with \texttt{0x0FFF} denoting global native {SM}), paired with an FP32 field storing axial alignment $\alpha_v = \langle u_v, \mu_c\rangle$ for residual-cone vertices or precomputed canonical inverse norm $(D+3s_v)^{-1/2}$ for global vertices. The triple $(a_v,\delta_v,\sigma_v)$ supports the main conditional-mean hop scorer and \textsc{Stage-0.5}. The global inverse-norm slot supports legacy canonical paths, while residual scoring reads $\alpha_v$ and computes $\beta_v$.
 \end{itemize}
-Table~\ref{tab:node_layout} gives the representation payload at $D=768$, $M_0=32$. Table~\ref{tab:memory_audit} reconciles this payload with the benchmark's navigation-byte counter. The measured allocation is $485.0$\,MB in split form and $517.0$\,MB with page co-location, compared with $1{,}261.0$\,MB for the measured {Polar-SQ8} implementation ($2.60\times$ and $2.44\times$ ratios) and $3{,}565.0$\,MB for {Polar-FP32} traversal.\ifpreprint\ Appendix~\ref{app:scalar_rounding} quantifies header rounding.\fi
+Table~\ref{tab:node_layout} gives the per-vertex logical payload at $D=768$, $M_0=32$ ($384$\,B with \texttt{SymSketch256} under \texttt{HotSmPage}, or $352$\,B without the sketch in split form), and Table~\ref{tab:memory_audit} reconciles this payload with the benchmark's navigation-byte counter. The measured allocation is $517.0$\,MB with page co-location ($2.44\times$ below the measured {Polar-SQ8} implementation at $1{,}261.0$\,MB and $6.90\times$ below {Polar-FP32} at $3{,}565.0$\,MB) or $485.0$\,MB in split form ($2.60\times$ and $7.35\times$ smaller).\ifpreprint\ Appendix~\ref{app:scalar_rounding} quantifies header rounding.\fi
 
 \begin{table}[t]
   \centering
-  \caption{Per-vertex representation payload at $D=768, M_0=32$ ($N=1\text{M}$). For the 2-bit and SQ8 paths, cold FP32 vectors are read during final reranking. Allocation components appear in Table~\ref{tab:memory_audit}.}
+  \caption{Per-vertex logical representation payload at $D=768, M_0=32$ ($N=1\text{M}$). For the 2-bit and SQ8 paths, cold FP32 vectors are read during final reranking. Full allocation components appear in Table~\ref{tab:memory_audit}.}
   \label{tab:node_layout}
   \small
   \setlength{\tabcolsep}{3pt}
   \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}Xrrrr@{}}
     \toprule
-    \textbf{Representation} & \textbf{\shortstack{Polar\\Meta}} & \textbf{\shortstack{Dir.\\Code}} & \textbf{\shortstack{Edge\\Slots}} & \textbf{\shortstack{Payload\\Total}} \\
+    \textbf{Representation} & \textbf{\shortstack{Header\\(/Sketch)}} & \textbf{\shortstack{Dir.\\Code}} & \textbf{\shortstack{Active\\Edges}} & \textbf{\shortstack{Logical\\Total}} \\
     \midrule
     Full-Vector Nav (FP32) & 32\,B & 3,072\,B & 128\,B & 3,232\,B \\
     Polar-SQ8 (8-bit dir.) & 32\,B & 768\,B & 128\,B & 928\,B \\
-    \textbf{\rquiver{} (2-bit SM)} & \textbf{32\,B} & \textbf{192\,B} & \textbf{128\,B} & \textbf{352\,B$^\dagger$} \\
-    \textbf{+ Tangent-Cone Rescue} & \textbf{32\,B} & \textbf{192\,B} & \textbf{128\,B} & \textbf{352\,B$^\dagger$} \\
+    \rquiver{}-Split (no sketch) & 32\,B & 192\,B & 128\,B & 352\,B$^\dagger$ \\
+    \textbf{\rquiver{} (\texttt{HotSmPage})} & \textbf{64\,B} & \textbf{192\,B} & \textbf{128\,B} & \textbf{384\,B$^\dagger$} \\
     \bottomrule
   \end{tabularx}
   \par\vspace{2pt}
-  {\footnotesize $^\dagger$Residual encoding reuses the same per-vertex slots. Its global axis dictionary occupies $4CD$ bytes for $C\le512$ axes, including $0.50$\,MiB at the measured $C=256,D=512$.}
+  {\footnotesize\raggedright\noindent $^\dagger$\texttt{HotSmPage} adds $32$\,B \texttt{SymSketch256} to the $32$\,B polar header ($64$\,B \texttt{HotSmHeader}). Active edges count $M_0=32$ \texttt{u32} IDs ($128$\,B), while fixed-stride adjacency reserves $64$ slots/vertex ($256$\,MB; Table~\ref{tab:memory_audit}). Residual encoding reuses the same per-vertex slots ($4CD$\,B global dictionary for $C\le512$ axes, or $0.50$\,MiB at $C=256,D=512$).\par}
 \end{table}
 
 \begin{table*}[t]
@@ -78,7 +78,7 @@ To realize Theorem~\ref{thm:tangent_cone}(3) without disturbing unclustered mani
   A cone $\mu_c$ is retained if and only if it meets minimum sample support $\operatorname{clamp}(\lfloor N_{\mathrm{samp}}/1024\rfloor, 3, 12)$ and achieves high intra-cone mean alignment $\bar{\alpha}_c \ge 0.955$.
 \end{enumerate}
 Every database vertex $v$ achieving $\alpha_v = \langle u_v, \mu_c\rangle \ge 0.94$ against its nearest retained axis stores the 2-bit {SM} code of its normalized tangent residual $\tilde{r}_v = (u_v - \alpha_v\mu_c)/\sqrt{1 - \alpha_v^2}$ in the existing 192-byte bitplane slot and records $\text{cone\_id}$ in the 12-bit header field (with \texttt{0x0FFF} reserved for global {SM}, \textbf{0\,B/vertex} overhead), giving $\beta_v^2=1-\alpha_v^2\le0.1164$. The cosine-error multiplier is $\beta_{q,c}\beta_v$ in Theorem~\ref{thm:tangent_cone}(3).
-The four real benchmarks retain zero cones under the joint support and purity criteria. Both synthetic clustered datasets retain 256 axes ($0.50$\,MiB at $D=512$). This gate selects tightly concentrated directional modes from the database sample.
+Setting $\alpha_{\min} = 0.94$ and $\bar{\alpha}_c \ge 0.955$ activates residual coding only when tight concentration ($\beta_v^2 \le 0.1164$) outweighs axis-projection cost: all four diffuse real datasets pass through on the zero-overhead global path ($0$ cones), whereas both clustered benchmarks retain all $256$ axes ($0.50$\,MiB at $D=512$).
 
 \subsection{Inside-Out Seeding and Stem-Excess QuadriPrune}
 \label{subsec:compass}
@@ -152,15 +152,15 @@ Selection uses cumulative caps within each $M_0=32$-slot list.
 \end{equation}
 Candidates must satisfy $\rho_v<\rho_u-0.18$ inward or $\rho_v>\rho_u+0.18$ outward. Direction-specific dominators satisfy $\rho_w<\rho_u-0.10$ or $\rho_w>\rho_u+0.10$, respectively, and use the angular $\alpha$ test.
 If these passes leave capacity, a diversity pass orders remaining candidates by $\ell_\angle(u,v)+0.25|\rho_u-\rho_v|$ and admits angular dominators within $|\rho_w-\rho_v|\le1.0$. A final ordered fill takes remaining distinct candidates up to $M_0$.
-At constant depth the elevator sets are empty and the ring ranks by angle. Appendix~\ref{app:vamana_pathologies} derives the channel-wise constant-depth and flat-curvature limits.
+At constant depth the elevator sets are empty and the ring ranks by angle, using the fixed dataset-independent channel quotas and tolerances in Table~\ref{tab:fixed_parameters}. Appendix~\ref{app:vamana_pathologies} derives the channel-wise constant-depth and flat-curvature limits.
 
 \subsection{Spanning-Tree Chord-Swap Island Repair}
 \label{subsec:repair}
 
 Parallel batch insertion and hub saturation can still leave $0.05\%\text{--}0.06\%$ of extreme boundary vertices with zero incoming edges ($\deg^-(u) = 0$: $518\text{--}626$ islands on {Cohere-1M}), capping asymptotic recall strictly below $100\%$.
-The chord-swap pass in Algorithm~\ref{alg:compass_build} grows entry reachability while preserving maximum out-degree $\deg^+(p)\le M_0$. A qualifying anchor has spare capacity or an eligible non-tree chord.
+The chord-swap pass in Algorithm~\ref{alg:compass_build} grows directed {BFS} entry reachability while preserving maximum out-degree $\deg^+(p)\le M_0$. A qualifying anchor has spare capacity or an eligible non-tree chord.
 Directed {BFS} initializes a spanning tree $(\mathcal{R},\texttt{parent})$ from the router entry hub, each unreachable vertex $u \notin \mathcal{R}$ selects a reachable anchor $p \in \mathcal{R}$ (scanning $N^+(u)$, router hubs, and the interior core prefix) and either appends $p \to u$ (if $\deg^+(p) < M_0$) or replaces a peripheral non-tree chord $p \to w^\star$ satisfying both $\texttt{parent}[w^\star] \ne p$ and $\deg^-(w^\star) \ge 2$, decrementing $\deg^-(w^\star)$ in place and expanding $(\mathcal{R}, \texttt{parent})$ incrementally from $u$\ifpreprint\ (monotonic reachability invariant proved in Appendix~\ref{app:vamana_pathologies})\fi.
-Because no spanning-tree edge is ever overwritten, $\mathcal{R}$ grows monotonically without cycle breakage; across all 21 million-scale {Zen~4} graphs, the pass reduces unreachable islands to \textbf{0} ($1{,}000{,}000 / 1{,}000{,}000$ reachable) in under $0.3$\,s.
+Because no spanning-tree edge is ever overwritten, $\mathcal{R}$ grows monotonically without cycle breakage; across all 21 million-scale {Zen~4} graphs, the pass reduces zero-in-degree islands to \textbf{0} ($1{,}000{,}000 / 1{,}000{,}000$ directed-{BFS} reachable from the entry hub) in under $0.3$\,s.
 
 \subsection{Convex-Support Polar Router}
 \label{subsec:router}

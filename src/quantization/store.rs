@@ -27,7 +27,6 @@ pub struct Bq2Store {
     #[cfg(feature = "research")]
     pub(crate) legacy_soa: Option<(Vec<u64>, Vec<u64>)>,
     /// 回收分离数组后共享合表中的签名，保持只读接口和节点编号有效。
-    #[cfg(feature = "research")]
     pub(crate) colocated_store: Option<std::sync::Arc<crate::graph::HotSmStore>>,
     /// 每个签名的 u64 chunk 数量（= dim.div_ceil(64)）
     pub(crate) chunks: usize,
@@ -42,7 +41,6 @@ impl Bq2Store {
             interleaved: Vec::new(),
             #[cfg(feature = "research")]
             legacy_soa: None,
-            #[cfg(feature = "research")]
             colocated_store: None,
             chunks,
             n: 0,
@@ -72,6 +70,7 @@ impl Bq2Store {
 
     #[inline]
     pub(crate) fn interleaved_u64_slice_mut(&mut self) -> &mut [u64] {
+        self.restore_interleaved();
         let total_u64 = self.interleaved.len() * 8;
         unsafe {
             std::slice::from_raw_parts_mut(self.interleaved.as_mut_ptr() as *mut u64, total_u64)
@@ -80,7 +79,6 @@ impl Bq2Store {
 
     #[inline]
     pub(crate) fn ensure_interleaved_words(&mut self, required_words: usize) {
-        #[cfg(feature = "research")]
         self.restore_interleaved();
         let req_lines = required_words.div_ceil(8);
         if self.interleaved.len() < req_lines {
@@ -92,7 +90,6 @@ impl Bq2Store {
     #[inline(always)]
     pub(crate) fn node_ptrs(&self, idx: usize) -> (*const u64, *const u64) {
         debug_assert!(idx < self.n);
-        #[cfg(feature = "research")]
         if let Some(store) = &self.colocated_store {
             let node = store.get(idx);
             return (node.pos.as_ptr(), node.strong.as_ptr());
@@ -153,7 +150,6 @@ impl Bq2Store {
 
     /// 预分配空间
     pub fn reserve(&mut self, additional: usize) {
-        #[cfg(feature = "research")]
         self.restore_interleaved();
         #[cfg(feature = "research")]
         if let Some((pos, strong)) = &mut self.legacy_soa {
@@ -243,7 +239,6 @@ impl Bq2Store {
             interleaved,
             #[cfg(feature = "research")]
             legacy_soa: None,
-            #[cfg(feature = "research")]
             colocated_store: None,
             chunks,
             n,
@@ -337,7 +332,6 @@ impl Bq2Store {
     pub(crate) fn set_node_slices(&mut self, idx: usize, pos_src: &[u64], strong_src: &[u64]) {
         assert!(idx < self.n, "节点下标越界");
         let chunks = self.chunks;
-        #[cfg(feature = "research")]
         self.restore_interleaved();
         #[cfg(feature = "research")]
         if let Some((pos, strong)) = &mut self.legacy_soa {
@@ -590,7 +584,6 @@ impl Bq2Store {
     }
 
     /// 由共享合表接管签名读取，释放分离缓冲并保留逻辑节点数量。
-    #[cfg(feature = "research")]
     pub(crate) fn reclaim_for_colocated(
         &mut self,
         store: std::sync::Arc<crate::graph::HotSmStore>,
@@ -599,11 +592,13 @@ impl Bq2Store {
         assert_eq!(self.n, store.len(), "合表与签名存储的节点数必须一致");
         self.colocated_store = Some(store);
         self.interleaved = Vec::new();
-        self.legacy_soa = None;
+        #[cfg(feature = "research")]
+        {
+            self.legacy_soa = None;
+        }
     }
 
     /// 首次写入或切换布局前恢复可变签名，完成复制后再释放共享合表。
-    #[cfg(feature = "research")]
     pub(crate) fn restore_interleaved(&mut self) {
         let Some(store) = &self.colocated_store else {
             return;
@@ -680,7 +675,6 @@ impl Bq2Store {
             interleaved,
             #[cfg(feature = "research")]
             legacy_soa: None,
-            #[cfg(feature = "research")]
             colocated_store: None,
             chunks,
             n,
@@ -697,7 +691,6 @@ impl Bq2Store {
             interleaved,
             #[cfg(feature = "research")]
             legacy_soa: None,
-            #[cfg(feature = "research")]
             colocated_store: None,
             chunks,
             n,
@@ -707,6 +700,7 @@ impl Bq2Store {
     /// 返回底层交织字数组可变切片及单节点步长 `stride = 2 * chunks`，每个节点前 `chunks` 为 `pos`、后 `chunks` 为 `strong`。
     #[inline]
     pub(crate) fn interleaved_words_mut(&mut self) -> (&mut [u64], usize) {
+        self.restore_interleaved();
         let stride = self.chunks * 2;
         let total_words = self.n * stride;
         let words = unsafe {

@@ -47,19 +47,14 @@ impl Index {
         }
         match self.metric {
             Metric::Cosine => Err(Error::InvalidSearchConfig("损失分解当前专用于双曲流形诊断")),
-            Metric::Poincare { curvature } => Ok(self.graph.search_native_loss_stats(
-                &NativeSpace {
-                    vectors: &self.vectors,
-                    boundary_factors: &self.boundary_factors,
-                    dimensions: self.dimensions,
-                    curvature,
-                },
+            Metric::Poincare { curvature } => self.graph.search_native_loss_stats(
+                &self.native_space(curvature, true),
                 query,
                 factor,
                 config,
                 navigation == PoincareNavigation::GeometryBq2,
                 truth_ids,
-            )),
+            ),
         }
     }
 
@@ -79,18 +74,13 @@ impl Index {
         }
         match self.metric {
             Metric::Cosine => Err(Error::InvalidSearchConfig("阶段剖析当前专用于双曲流形诊断")),
-            Metric::Poincare { curvature } => Ok(self.graph.search_native_stage_profile(
-                &NativeSpace {
-                    vectors: &self.vectors,
-                    boundary_factors: &self.boundary_factors,
-                    dimensions: self.dimensions,
-                    curvature,
-                },
+            Metric::Poincare { curvature } => self.graph.search_native_stage_profile(
+                &self.native_space(curvature, true),
                 query,
                 factor,
                 config,
                 navigation == PoincareNavigation::GeometryBq2,
-            )),
+            ),
         }
     }
 
@@ -107,21 +97,31 @@ impl Index {
             return Ok(Vec::new());
         }
         match self.metric {
-            Metric::Cosine => Ok(self.graph.search_flat(query, &self.vectors, config)),
+            Metric::Cosine => {
+                if self.rerank.is_some() {
+                    let ids = self.graph.cold_candidate_ids(query, config);
+                    self.rerank_candidates(query, &ids, config.top_k)
+                } else {
+                    Ok(self.graph.search(
+                        query,
+                        |slot, buffer| {
+                            buffer.clear();
+                            buffer.extend_from_slice(self.vectors.row(slot, self.dimensions));
+                            true
+                        },
+                        config,
+                    ))
+                }
+            }
             Metric::Poincare { curvature } => self
                 .graph
                 .search_native(
-                    &NativeSpace {
-                        vectors: &self.vectors,
-                        boundary_factors: &self.boundary_factors,
-                        dimensions: self.dimensions,
-                        curvature,
-                    },
+                    &self.native_space(curvature, true),
                     query,
                     factor,
                     config,
                     navigation == PoincareNavigation::GeometryBq2,
-                )
+                )?
                 .into_iter()
                 .map(|(id, distance)| score_distance(id, distance))
                 .collect(),
@@ -141,7 +141,7 @@ impl Index {
             if !self.active[slot] {
                 continue;
             }
-            let vector = &self.vectors[slot * self.dimensions..(slot + 1) * self.dimensions];
+            let vector = self.vectors.row(slot, self.dimensions);
             let score = match self.metric {
                 Metric::Cosine => f64::from(cosine_similarity_f32(query, vector)),
                 Metric::Poincare { curvature } => -poincare_distance(
@@ -151,22 +151,6 @@ impl Index {
             };
             candidates.push((id, score));
         }
-        // 仅对选出的 top_k 排序，避免精确真值排序整个百万文档库。
-        if candidates.len() > top_k {
-            candidates
-                .select_nth_unstable_by(top_k, |a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
-            candidates.truncate(top_k);
-        }
-        candidates.sort_unstable_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
-        candidates
-            .into_iter()
-            .map(|(id, score)| {
-                if score.is_finite() && (score as f32).is_finite() {
-                    Ok((id, score as f32))
-                } else {
-                    Err(Error::DistanceOverflow)
-                }
-            })
-            .collect()
+        super::storage::rank_scores(candidates, top_k)
     }
 }

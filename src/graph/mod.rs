@@ -6,7 +6,7 @@
 //! 核心架构：
 //!   - 2-bit Sign-Magnitude 量化 (pos + strong)
 //!   - Vamana α-diversity 剪枝构图
-//!   - Symmetric 寻路 (XOR+Popcount) + f32 精排
+//!   - Symmetric 寻路 (XOR+Popcount) + 可选精度的冷向量精排
 //!
 //! 设计要点：
 //!   - Bitset visited: 可复用位向量，2.5KB/20K 节点
@@ -27,7 +27,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 mod hyperbolic;
-#[cfg(feature = "research")]
+mod snapshot;
 pub(crate) use hyperbolic::HotSmStore;
 pub(crate) use hyperbolic::NativeSpace;
 #[cfg(feature = "research")]

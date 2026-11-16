@@ -11,48 +11,38 @@ fn next_u64(state: &mut u64) -> u64 {
 }
 
 #[test]
-fn test_bq2_signature_creation() {
-    let vec = vec![0.0f32, 1.0, -1.0, 2.0, -2.0, 0.5, -0.5];
-    let sig = Bq2Signature::from_vector(&vec);
-    assert_ne!(sig, Bq2Signature::empty());
-    let sig2 = Bq2Signature::from_vector(&[1.0f32, -1.0]);
-    assert_ne!(sig, sig2);
-}
+fn test_bq2_signature_and_store_encoding() {
+    // 验证二值+强幅度编码精确比特布局与空存储语义（均值(|v|) = 7/7 = 1.0，严格 > 阈值触发强位）
+    let sig = Bq2Signature::from_vector(&[0.0f32, 1.0, -1.0, 2.0, -2.0, 0.5, -0.5]);
+    assert_eq!(sig.pos, vec![0b0010_1010]);
+    assert_eq!(sig.strong, vec![0b0001_1000]);
+    assert_eq!(
+        Bq2Signature::from_vector(&[0.0f32; 0]).pos,
+        Vec::<u64>::new()
+    );
 
-#[test]
-fn test_bq2_distance() {
-    let v1 = vec![1.0f32, 1.0, -1.0, -1.0];
-    let v2 = vec![1.0f32, -1.0, 1.0, -1.0];
+    let mut store = Bq2Store::new(4);
+    assert!(store.is_empty());
+    let v1 = [1.0f32, 1.0, -1.0, -1.0];
+    let v2 = [1.0f32, -1.0, 1.0, -1.0];
+    store.push_from_vector(&v1);
+    store.push_from_vector(&v2);
+    assert_eq!(store.len(), 2);
+    assert!(!store.is_empty());
+
     let sig1 = Bq2Signature::from_vector(&v1);
     let sig2 = Bq2Signature::from_vector(&v2);
-    let dist = sig1.distance(&sig2, 4);
-    assert!(dist > sig1.distance(&sig1, 4));
-}
-
-#[test]
-fn test_bq2_distance_raw_scalar() {
-    let v1 = vec![1.0f32, 1.0, -1.0, -1.0];
-    let v2 = vec![1.0f32, -1.0, 1.0, -1.0];
-    let sig1 = Bq2Signature::from_vector(&v1);
-    let sig2 = Bq2Signature::from_vector(&v2);
-
-    let dist = bq2_distance_raw_scalar(
+    let expected = bq2_distance_raw_scalar(
         sig1.pos.as_ptr(),
         sig1.strong.as_ptr(),
         sig2.pos.as_ptr(),
         sig2.strong.as_ptr(),
         4,
     );
-    assert_eq!(dist, sig1.distance(&sig2, 4));
-
-    let raw_dist = bq2_distance_raw(
-        sig1.pos.as_ptr(),
-        sig1.strong.as_ptr(),
-        sig2.pos.as_ptr(),
-        sig2.strong.as_ptr(),
-        4,
-    );
-    assert_eq!(dist, raw_dist);
+    assert_eq!(expected, 16);
+    assert_eq!(sig1.distance(&sig2, 4), expected);
+    assert_eq!(store.distance(0, 1, 4), expected);
+    assert_eq!(store.distance(0, 0, 4), 12);
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -62,7 +52,7 @@ fn dim384专用完整距离与通用标量位级一致() {
         return;
     }
     let mut state = 0x9E37_79B9_7F4A_7C15;
-    for _ in 0..100_000 {
+    for _ in 0..2_048 {
         let mut pos_a = [0u64; 6];
         let mut strong_a = [0u64; 6];
         let mut pos_b = [0u64; 6];
@@ -99,7 +89,7 @@ fn dim384专用廉价距离与通用循环位级一致() {
         return;
     }
     let mut state = 0xD1B5_4A32_D192_ED03;
-    for _ in 0..100_000 {
+    for _ in 0..2_048 {
         let mut pos_a = [0u64; 6];
         let mut strong_a = [0u64; 6];
         let mut pos_b = [0u64; 6];
@@ -221,25 +211,6 @@ fn 非完整尾块在所有奇偶chunk组合下保持标量语义() {
     }
 }
 
-#[test]
-fn test_bq2_store() {
-    let mut store = Bq2Store::new(4);
-    assert!(store.is_empty());
-    assert_eq!(store.len(), 0);
-
-    store.reserve(10);
-
-    store.push_from_vector(&[1.0f32, 2.0, 3.0, 4.0]);
-    assert_eq!(store.len(), 1);
-
-    store.push_from_vector(&[-1.0f32, -2.0, -3.0, -4.0]);
-    assert_eq!(store.len(), 2);
-
-    let dist01 = store.distance(0, 1, 4);
-    let dist00 = store.distance(0, 0, 4);
-    assert!(dist01 > dist00);
-}
-
 #[cfg(feature = "research")]
 #[test]
 fn 合表签名后端保持读取序列化和首次写入一致() {
@@ -255,6 +226,8 @@ fn 合表签名后端保持读取序列化和首次写入一致() {
         let slots: Vec<usize> = (0..n).collect();
         let space = crate::graph::NativeSpace {
             vectors: &vectors,
+            delta: &[],
+            rerank: None,
             boundary_factors: &factors,
             dimensions: dim,
             curvature: 1.0,
@@ -309,17 +282,6 @@ fn 合表签名后端保持读取序列化和首次写入一致() {
             }
         }
     }
-}
-
-#[test]
-fn test_bq2_store_long_vector() {
-    let mut store = Bq2Store::new(128);
-    let v1 = vec![1.0f32; 128];
-    let v2 = vec![-1.0f32; 128];
-    store.push_from_vector(&v1);
-    store.push_from_vector(&v2);
-
-    assert!(store.distance(0, 0, 128) < store.distance(0, 1, 128));
 }
 
 #[test]

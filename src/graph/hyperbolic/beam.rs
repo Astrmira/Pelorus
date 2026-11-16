@@ -638,11 +638,19 @@ impl QuIVer {
                         None
                     };
 
+                    #[cfg(feature = "research")]
+                    let mut main_expansions = 0usize;
+                    #[cfg(feature = "research")]
+                    let mut horizon_expansions = 0usize;
                     while let Some(Reverse(cand)) = scratch.candidates.pop() {
                         if scratch.apex_results.len() >= ef_nav
                             && cand > *scratch.apex_results.peek().unwrap()
                         {
                             break;
+                        }
+                        #[cfg(feature = "research")]
+                        if stage_prof {
+                            main_expansions += 1;
                         }
                         let neighbors = self.native_layer0_neighbors_fast(cand.1, trace_slow);
                         if rolling_prefetch && neighbors.len() <= 64 {
@@ -698,6 +706,10 @@ impl QuIVer {
                                 break;
                             }
                             horiz_steps += 1;
+                            #[cfg(feature = "research")]
+                            if stage_prof {
+                                horizon_expansions += 1;
+                            }
                             let neighbors = self.native_layer0_neighbors_fast(h_node, trace_slow);
                             if rolling_prefetch && neighbors.len() <= 64 {
                                 let mut unv = [0u32; 64];
@@ -745,8 +757,15 @@ impl QuIVer {
                     #[cfg(feature = "research")]
                     let t_gate_start = if let Some(t1) = t_beam_start {
                         let now = std::time::Instant::now();
-                        STAGE_PROFILE
-                            .with(|p| p.borrow_mut().beam_nav_ns = (now - t1).as_nanos() as u64);
+                        STAGE_PROFILE.with(|p| {
+                            let mut p = p.borrow_mut();
+                            p.beam_nav_ns = (now - t1).as_nanos() as u64;
+                            p.navigation_passes += 1;
+                            p.main_expansion_calls = main_expansions;
+                            p.horizon_expansion_calls = horizon_expansions;
+                            p.ef_nav = ef_nav;
+                            p.router_seeds = scratch.router_seeds.len();
+                        });
                         Some(now)
                     } else {
                         None
@@ -891,6 +910,12 @@ impl QuIVer {
                                     );
                                 }
                             }
+                        }
+                        #[cfg(feature = "research")]
+                        if stage_prof {
+                            STAGE_PROFILE.with(|p| {
+                                p.borrow_mut().stage05_candidates = scratch.gate_pool.len();
+                            });
                         }
                         if scratch.gate_pool.len() > ef {
                             scratch.gate_pool.select_nth_unstable(ef);

@@ -105,6 +105,39 @@ impl HotSmStore {
         self.len
     }
 
+    /// 从已校验的热状态恢复页布局，直接复用保存的草图并保持残差签名。
+    pub(crate) fn restore(
+        dim: usize,
+        signatures: &Bq2Store,
+        metadata: &[PolarNodeMeta],
+        sketches: &[[u64; 4]],
+    ) -> Self {
+        let chunks = dim.div_ceil(64);
+        let record_bytes = (64 + chunks * 16).next_power_of_two();
+        let per_page = 4096 / record_bytes;
+        let len = metadata.len();
+        let mut pages = vec![HotSmPage::default(); len.div_ceil(per_page)];
+        for node in 0..len {
+            let page = &mut pages[node / per_page];
+            let offset = node % per_page * record_bytes / 8;
+            // SAFETY：页基址按4096字节对齐，步长至少64字节且整除页长，头部及位平面完全位于当前页。
+            let header = unsafe { &mut *page.words.as_mut_ptr().add(offset).cast::<HotSmHeader>() };
+            *header = HotSmHeader {
+                meta: metadata[node],
+                sketch256: sketches[node],
+            };
+            page.words[offset + 8..offset + 8 + chunks].copy_from_slice(signatures.pos_slice(node));
+            page.words[offset + 8 + chunks..offset + 8 + chunks * 2]
+                .copy_from_slice(signatures.strong_slice(node));
+        }
+        Self {
+            pages,
+            len,
+            chunks,
+            record_bytes,
+        }
+    }
+
     #[inline(always)]
     pub(crate) fn get(&self, idx: usize) -> HotSmNode<'_> {
         debug_assert!(idx < self.len);

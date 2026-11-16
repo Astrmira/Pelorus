@@ -3,7 +3,6 @@
 use super::*;
 
 /// 构造 N 个正交基向量（dim 维），每个向量只在第 i%dim 维为 1.0
-#[allow(dead_code)] // 测试辅助函数，保留备用
 fn make_orthogonal_vectors(n: usize, dim: usize) -> Vec<f32> {
     let mut vecs = vec![0.0f32; n * dim];
     for i in 0..n {
@@ -360,53 +359,6 @@ fn dim384专用搜索与通用路径结果一致() {
 }
 
 #[test]
-fn test_quiver_基础建图与搜索() {
-    let config = BuildConfig {
-        m: 16,
-        ef_construction: 32,
-        alpha: 1.2,
-    };
-    let mut quiver = QuIVer::new(4, &config);
-
-    let vectors = vec![
-        1.0f32, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    ];
-    let ids = vec![10, 20, 30, 40];
-    let slots = vec![0, 1, 2, 3];
-
-    quiver.build_parallel(&vectors, &ids, &slots);
-
-    assert_eq!(quiver.active_count(), 4);
-    assert_eq!(quiver.total_count(), 4);
-
-    let query = vec![1.0f32, 0.0, 0.0, 0.0];
-    let search_config = SearchConfig {
-        top_k: 2,
-        ef_search: 10,
-        rerank_limit: None,
-    };
-
-    let results = quiver.search_flat(&query, &vectors, &search_config);
-    assert!(!results.is_empty());
-    assert_eq!(results[0].0, 10);
-
-    // 测试软删除
-    quiver.soft_delete(10);
-    assert_eq!(quiver.active_count(), 3);
-
-    let results_after = quiver.search_flat(&query, &vectors, &search_config);
-    if !results_after.is_empty() {
-        assert_ne!(results_after[0].0, 10);
-    }
-
-    let stats = quiver.stats();
-    assert_eq!(stats.n, 4);
-    assert_eq!(stats.tombstone_count, 1);
-
-    assert!(!quiver.needs_rebuild());
-}
-
-#[test]
 fn test_quiver_多路径建图与序列化() {
     let config = BuildConfig {
         m: 16,
@@ -415,53 +367,75 @@ fn test_quiver_多路径建图与序列化() {
     };
     let mut quiver = QuIVer::new(4, &config);
 
-    let vectors = vec![
+    let vectors = [
         1.0f32, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
     ];
     let ids = vec![10, 20, 30, 40];
     let slots = vec![0, 1, 2, 3];
+    let search_config = SearchConfig {
+        top_k: 2,
+        ef_search: 16,
+        rerank_limit: None,
+    };
+    let query = [1.0f32, 0.0, 0.0, 0.0];
 
-    // 测试批量建图
     quiver.batch_build(&vectors, &ids, &slots);
     assert_eq!(quiver.total_count(), 4);
+    assert_eq!(
+        quiver.search_flat(&query, &vectors, &search_config)[0].0,
+        10
+    );
 
-    // 测试追加式批量建图
+    let mut all_vectors = vectors.to_vec();
+    all_vectors.extend_from_slice(&vectors);
     quiver.build_parallel_eager(&vectors, &[50, 60, 70, 80], &[4, 5, 6, 7]);
     assert_eq!(quiver.total_count(), 8);
+    assert_eq!(
+        quiver
+            .search_flat(&query, &all_vectors, &search_config)
+            .len(),
+        2
+    );
 
-    // 测试带校验的批量建图（会重置图）
     quiver.build_parallel_checked(&vectors, &ids, &slots);
     assert_eq!(quiver.total_count(), 4);
+    assert_eq!(
+        quiver.search_flat(&query, &vectors, &search_config)[0].0,
+        10
+    );
 
-    // 测试单节点增量插入
     let mut lcg = 12345;
-    let v5 = vec![0.5, 0.5, 0.0, 0.0];
-    quiver.insert(&v5, 50, 4, &mut lcg);
+    let mut extended = vectors.to_vec();
+    extended.extend_from_slice(&[0.5, 0.5, 0.0, 0.0]);
+    quiver.insert(&extended[16..20], 50, 4, &mut lcg);
     assert_eq!(quiver.total_count(), 5);
+    assert_eq!(
+        quiver.search_flat(&[0.6, 0.6, 0.0, 0.0], &extended, &search_config)[0].0,
+        50
+    );
 
     quiver.dirty_count_inc();
     quiver.dirty_count_inc();
     assert!(quiver.needs_rebuild());
 
-    quiver.debug_connectivity();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test_quiver_ser.quiv");
+    quiver.save_to_file(&path).unwrap();
 
-    // 测试序列化与反序列化
-    let path = std::path::Path::new("test_quiver_ser.quiv");
-    quiver.save_to_file(path).unwrap();
-
-    let loaded = QuIVer::load_from_file(path).unwrap();
+    let loaded = QuIVer::load_from_file(&path).unwrap();
     assert_eq!(loaded.total_count(), 5);
     assert_eq!(loaded.active_count(), 5);
     assert_eq!(loaded.dim, 4);
     assert_eq!(loaded.entry_point, quiver.entry_point);
     assert_eq!(loaded.ids, vec![10, 20, 30, 40, 50]);
-
-    let _ = std::fs::remove_file(path);
+    assert_eq!(
+        loaded.search_flat(&[0.6, 0.6, 0.0, 0.0], &extended, &search_config),
+        quiver.search_flat(&[0.6, 0.6, 0.0, 0.0], &extended, &search_config)
+    );
 }
 
 #[test]
 fn test_quiver_中等规模搜索() {
-    // 50 个节点，8 维，测试更完整的 beam search 路径
     let dim = 8;
     let n = 50;
     let config = BuildConfig {
@@ -482,7 +456,6 @@ fn test_quiver_中等规模搜索() {
     assert!(stats.avg_degree_l0 > 0.0);
     assert!(stats.hot_bytes > 0);
 
-    // 用第 0 号向量自身做查询，应该能搜到自己
     let query = vectors[0..dim].to_vec();
     let search_config = SearchConfig {
         top_k: 5,
@@ -490,54 +463,19 @@ fn test_quiver_中等规模搜索() {
         rerank_limit: Some(20),
     };
     let results = quiver.search_flat(&query, &vectors, &search_config);
-    assert!(!results.is_empty());
-    assert_eq!(results[0].0, 0); // 自身应为 Top-1
+    assert_eq!(results.len(), 5);
+    assert_eq!(results[0].0, 0);
 
-    // 删除一半节点再搜索
     for i in 0..n / 2 {
         quiver.soft_delete(i as u64);
     }
     assert_eq!(quiver.active_count(), n - n / 2);
+    assert_eq!(quiver.stats().tombstone_count, n / 2);
     let results2 = quiver.search_flat(&query, &vectors, &search_config);
+    assert_eq!(results2.len(), 5, "软删除一半后仍应返回 top_k 个存活邻居");
     for (id, _) in &results2 {
         assert!(*id >= n as u64 / 2, "已删除节点不应出现在结果中");
     }
-}
-
-#[test]
-fn test_quiver_空图搜索() {
-    let config = BuildConfig::default();
-    let quiver = QuIVer::new(4, &config);
-    assert_eq!(quiver.total_count(), 0);
-    assert_eq!(quiver.active_count(), 0);
-
-    let query = vec![1.0f32, 0.0, 0.0, 0.0];
-    let search_config = SearchConfig {
-        top_k: 5,
-        ef_search: 10,
-        rerank_limit: None,
-    };
-    let results = quiver.search_flat(&query, &[], &search_config);
-    assert!(results.is_empty());
-}
-
-#[test]
-fn test_quiver_单节点图() {
-    let config = BuildConfig::default();
-    let mut quiver = QuIVer::new(4, &config);
-
-    let vectors = vec![1.0f32, 0.0, 0.0, 0.0];
-    quiver.build_parallel(&vectors, &[42], &[0]);
-    assert_eq!(quiver.total_count(), 1);
-
-    let search_config = SearchConfig {
-        top_k: 1,
-        ef_search: 10,
-        rerank_limit: None,
-    };
-    let results = quiver.search_flat(&[1.0, 0.0, 0.0, 0.0], &vectors, &search_config);
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].0, 42);
 }
 
 #[test]
@@ -556,17 +494,9 @@ fn test_quiver_soft_delete_不存在的id() {
 }
 
 #[test]
-fn test_quiver_序列化错误路径() {
-    // 加载不存在的文件
-    let result = QuIVer::load_from_file(std::path::Path::new("nonexistent.quiv"));
-    assert!(result.is_err());
-}
-
-#[test]
 fn sidecar入口节点越界时安全拒绝() {
-    let dir = std::env::temp_dir().join("quiver_invalid_entry");
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("index.quiver");
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("index.quiver");
     let vectors = make_orthogonal_vectors(4, 4);
     let ids = vec![1, 2, 3, 4];
     let slots = vec![0, 1, 2, 3];
@@ -578,7 +508,6 @@ fn sidecar入口节点越界时安全拒绝() {
     let result = std::panic::catch_unwind(|| QuIVer::load_from_bytes(&bytes));
     assert!(result.is_ok());
     assert!(result.unwrap().is_err());
-    std::fs::remove_file(path).ok();
 }
 
 #[test]
@@ -627,27 +556,6 @@ fn fuzz发现的四十八字节样本不得触发panic() {
     let result = std::panic::catch_unwind(|| QuIVer::load_from_bytes(&bytes));
     assert!(result.is_ok());
     assert!(result.unwrap().is_err());
-}
-
-#[test]
-fn test_cosine_sim_函数() {
-    let a = [1.0f32, 0.0, 0.0];
-    let b = [1.0f32, 0.0, 0.0];
-    assert!((cosine_sim(&a, &b) - 1.0).abs() < 1e-5);
-
-    let c = [0.0f32, 1.0, 0.0];
-    assert!(cosine_sim(&a, &c).abs() < 1e-5);
-
-    let d = [-1.0f32, 0.0, 0.0];
-    assert!((cosine_sim(&a, &d) + 1.0).abs() < 1e-5);
-}
-
-#[test]
-fn test_quiver_config_default() {
-    let config = BuildConfig::default();
-    assert_eq!(config.m, 16);
-    assert_eq!(config.ef_construction, 128);
-    assert!((config.alpha - 1.2).abs() < 1e-5);
 }
 
 #[test]

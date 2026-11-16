@@ -104,7 +104,7 @@ The main hop scorer uses the conditional-mean five-popcount product from Lemma~\
   \kappa=\operatorname{clip}_{[0.5,1]}(\sigma_q\sigma_v).
   \label{eq:sm_calibration}
 \end{equation}
-The FP32 norms are precomputed at ingestion. The canonical code $\operatorname{sgn}(u_i)(1+m_i)\in\{\pm1,\pm2\}$, with inverse norm $(D+3s)^{-1/2}$, supplies legacy scoring paths. Training-free encoding computes bitplanes and conditional means directly from each vector. Cone-axis fitting uses the deterministic sample procedure in \S\ref{subsec:polar_layout}.
+The FP32 norms are precomputed at ingestion. For fixed $\kappa \in [0.5, 1]$, $g_\kappa(t) = t / (\kappa + (1 - \kappa)t^2)$ is strictly increasing on $[-1, 1]$ ($g'_\kappa(t) = [\kappa - (1 - \kappa)t^2] / [\kappa + (1 - \kappa)t^2]^2 > 0$ on $(-1, 1)$), preserving rank across equal-$\sigma_v$ candidates while calibrating hop scores ($\sigma_v$-dependent $\kappa$) ahead of \textsc{Stage-0.5}'s exact orthogonal projection. The canonical code $\operatorname{sgn}(u_i)(1+m_i)\in\{\pm1,\pm2\}$, with inverse norm $(D+3s)^{-1/2}$, supplies legacy scoring paths. Training-free encoding computes bitplanes and conditional means directly from each vector. Cone-axis fitting uses the deterministic sample procedure in \S\ref{subsec:polar_layout}.
 
 \paragraph{Problem Statement and Discrete Comparison Operators.}
 Given $N$ database points $\mathcal{X} \subset \Bball$ and query $q \in \Bball$, exact top-$k$ retrieval returns $\mathcal{N}_k(q)$ minimizing $d_{\mathbb{B}}(q, v)$, and {ANN} accuracy is evaluated via $\operatorname{Recall@}k = |\widehat{\mathcal{N}}_k(q) \cap \mathcal{N}_k(q)| / k$ against throughput ({QPS}) and p99 latency.

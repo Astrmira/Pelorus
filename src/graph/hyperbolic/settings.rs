@@ -106,18 +106,33 @@ pub struct SearchLossStats {
     /// 束内头行早筛直接拦截次数（免除后三条签名缓存行读取与 768D 位核计算）
     pub header_rejections: usize,
 }
-/// 零 HashSet 插桩污染的单次查询四阶段纯墙钟耗时分解（纳秒），仅在显式调用阶段剖析接口时启用。
+/// 无HashSet集合记录的单次查询阶段耗时与工作量，仅在显式阶段剖析时启用。
 #[cfg(feature = "research")]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SearchStageProfile {
+    /// 高层贪心入口下降耗时（纳秒）。
+    pub upper_greedy_ns: u64,
     /// 查询编码 + 极坐标锥-壳选种 + 初始种子评估耗时（纳秒）
     pub router_seed_ns: u64,
     /// 主导航束（apex + horiz）图扩展与近似评分/头行早筛耗时（纳秒）
     pub beam_nav_ns: u64,
     /// Stage-0.5 非对称校准过滤器候选池重排耗时（纳秒）
     pub asym_gate_ns: u64,
-    /// Stage-1 精确向量冷存读取与测地距离精排耗时（纳秒）
+    /// 重排读取、解码、径向过滤、堆操作及结果整理的整体耗时（纳秒）。
     pub exact_rerank_ns: u64,
+    /// 候选池返回后的预算选择与自适应扩容耗时（纳秒）。
+    pub candidate_select_ns: u64,
+    /// 重排记录读取、寄存器解码与距离计算的累计耗时（纳秒）。
+    pub rerank_score_ns: u64,
+    pub rerank_selected_count: usize,
+    pub reranked_count: usize,
+    pub rerank_radial_rejections: usize,
+    pub navigation_passes: usize,
+    pub main_expansion_calls: usize,
+    pub horizon_expansion_calls: usize,
+    pub stage05_candidates: usize,
+    pub ef_nav: usize,
+    pub router_seeds: usize,
 }
 #[cfg(feature = "research")]
 impl SearchLossStats {

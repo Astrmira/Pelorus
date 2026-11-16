@@ -8,7 +8,7 @@
 
 [English](README.md) | 简体中文
 
-**Pelorus** 是一个基于 Rust 实现的内存级近似最近邻（ANN）检索引擎，面向 **Poincaré 球**（$`\mathbb{B}_c^D`$）原生双曲检索与常规余弦检索。针对百万级非欧空间检索中的“几何保真度 vs. 内存占用”两难问题，Pelorus 将双曲嵌入解耦为翘曲乘积 $`\mathbb{R}_{\ge 0} \times \mathbb{S}^{D-1}`$，把精确的 32 字节径向/共形元数据、尺度不变的两位符号幅值（Sign-Magnitude, SM）球面编码与 FP64 尾部精排结合起来，实现高召回、高吞吐且低内存的热路径导航。
+**Pelorus** 是一个基于 Rust 实现的近似最近邻（ANN）检索引擎，支持常驻内存的导航结构与可选的 SSD 冷向量存储，面向 **Poincaré 球**（$`\mathbb{B}_c^D`$）原生双曲检索与常规余弦检索。针对百万级非欧空间检索中的“几何保真度 vs. 内存占用”两难问题，Pelorus 将双曲嵌入解耦为翘曲乘积 $`\mathbb{R}_{\ge 0} \times \mathbb{S}^{D-1}`$，把精确的 32 字节径向/共形元数据、尺度不变的两位符号幅值（Sign-Magnitude, SM）球面编码与 FP64 尾部精排结合起来，实现高召回、高吞吐且低内存的热路径导航。
 
 > **命名说明**：本项目与对应论文名称为 **Pelorus**；为兼容既有基准脚本与调用方，Rust crate 名称当前保留为 `quiver-ann`（代码中为 `use quiver_ann::...`）。历史命名对照与模块迁移见 [`docs/source-migration.md`](docs/source-migration.md)。
 
@@ -150,6 +150,36 @@ fn main() -> quiver_ann::Result<()> {
 
 ---
 
+## SSD 存储与重排精度
+
+```rust,no_run
+use quiver_ann::{Index, RerankConfig, RerankPrecision, ScalarQuantization, StorageMode};
+
+fn main() -> quiver_ann::Result<()> {
+    let mut index = Index::load("vectors.quiver")?;
+    index.set_rerank_config(RerankConfig {
+        precision: RerankPrecision::Sq8,
+        scalar_quantization: ScalarQuantization::Centered,
+        ..RerankConfig::default()
+    })?;
+    index.set_storage_mode(StorageMode::Mmap)?;
+    index.save_snapshot("vectors.pelorus")?;
+    let restored = Index::load_mmap("vectors.pelorus")?;
+    assert_eq!(restored.rerank_config(), index.rerank_config());
+    Ok(())
+}
+```
+
+重排支持 FP32、FP16、BF16、SQ8 与真实半字节打包的 SQ4。SQ 提供逐向量对称尺度、共享集合均值中心化及分组仿射尺度/偏置。极坐标模式保存 FP64 半径平方并压缩方向，笛卡尔模式可增加范数校正。压缩重排使用 FP64 运算，查询保持原始 FP32。
+
+量化内存模式仅将预编码重排记录常驻主存，原始FP32以文件映射供 `vector()`、`search_exact()` 和维护按需访问。编码或加载时准备每记录16 B的FP64评分元数据，AVX2与AVX-512融合码字重构和FP64累加，并提供标量回退。空间统计将原始、编码记录及准备元数据单列。快照由原子发布的入口文件及同目录不可变数据文件组成，支持旧代读者继续查询，备份需包含两者。加载会校验快照并直接恢复保存的实际图与导航状态。
+
+可执行示例使用 `cargo run --release --example ssd` 运行。配置、增量写入、文件生命周期和统计口径见[存储指南](docs/storage.md)。
+
+Linux 下可用 `Index::open_ssd(path, SsdCacheConfig::default())` 启用 `O_DIRECT` 重排读取、默认 128 MiB 共享页缓存和 32 MiB 在途缓冲预算。默认 io_uring 驱动由单调度线程管理深度 256 的固定文件、固定缓冲队列，合并并发同页读取并批量提交、回收异步预读。整个缓存与在途池注册为锁定内存，需有相应的 `RLIMIT_MEMLOCK`。`ssd_io_stats()` 报告缓存命中、物理 I/O、注册容量、批次、在途峰值及内核 IOWQ 注册能力。将 `cache_bytes` 设为 `512 * 1024 * 1024` 即可使用更大的缓存池。
+
+---
+
 ## 论文、图表与基准复现
 
 - **论文源码**：
@@ -174,6 +204,7 @@ src/
   config.rs                公开构建与查询配置（BuildConfig / SearchConfig）
   geometry.rs              极坐标/SM 量化表示与 PoincareNavigation 模式
   metric.rs                距离计算与流形域校验
+  storage/                 冷向量编码、mmap 基础层与内存增量层
   vector.rs                基础向量算子
   research.rs              research feature 下的策略配置与阶段诊断接口
   index/                   公开 Index API、参数校验、动态维护与持久化

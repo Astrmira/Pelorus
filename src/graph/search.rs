@@ -752,32 +752,7 @@ impl QuIVer {
         let dim = self.dim;
 
         let q_sig = Bq2Signature::from_vector(query);
-        let mut cur_node = self.entry_point;
-
-        // 高层贪心下降
-        for l in (1..=self.max_level).rev() {
-            let ul = l - 1;
-            if ul < self.upper_layers.len() {
-                loop {
-                    let mut changed = false;
-                    let cur_d = self
-                        .bq_store
-                        .distance_to_sig(cur_node as usize, &q_sig, dim);
-                    let mut best_d = cur_d;
-                    for &nb in &self.upper_layers[ul][cur_node as usize] {
-                        let nd = self.bq_store.distance_to_sig(nb as usize, &q_sig, dim);
-                        if nd < best_d {
-                            cur_node = nb;
-                            best_d = nd;
-                            changed = true;
-                        }
-                    }
-                    if !changed {
-                        break;
-                    }
-                }
-            }
-        }
+        let cur_node = self.cosine_entry(&q_sig);
 
         // Stage 1: Symmetric BQ beam search
         // 使用 thread_local Bitset 复用，避免每次查询 heap alloc
@@ -914,5 +889,59 @@ impl QuIVer {
             },
             config,
         )
+    }
+}
+
+impl QuIVer {
+    fn cosine_entry(&self, signature: &Bq2Signature) -> u32 {
+        let mut cur_node = self.entry_point;
+
+        for l in (1..=self.max_level).rev() {
+            let ul = l - 1;
+            if ul < self.upper_layers.len() {
+                loop {
+                    let mut changed = false;
+                    let cur_d =
+                        self.bq_store
+                            .distance_to_sig(cur_node as usize, signature, self.dim);
+                    let mut best_d = cur_d;
+                    for &nb in &self.upper_layers[ul][cur_node as usize] {
+                        let nd = self
+                            .bq_store
+                            .distance_to_sig(nb as usize, signature, self.dim);
+                        if nd < best_d {
+                            cur_node = nb;
+                            best_d = nd;
+                            changed = true;
+                        }
+                    }
+                    if !changed {
+                        break;
+                    }
+                }
+            }
+        }
+
+        cur_node
+    }
+
+    pub(crate) fn cold_candidate_ids(&self, query: &[f32], config: &SearchConfig) -> Vec<u64> {
+        if self.n == 0 {
+            return Vec::new();
+        }
+        let sig = Bq2Signature::from_vector(query);
+        let entry = self.cosine_entry(&sig);
+        thread_local! { static VISITED: std::cell::RefCell<Bitset> = std::cell::RefCell::new(Bitset::new(0)); }
+        let candidates = VISITED.with(|cell| {
+            let mut visited = cell.borrow_mut();
+            visited.grow(self.n);
+            self.beam_search_l0(&sig, entry, config.ef_search, &mut *visited)
+        });
+        candidates
+            .into_iter()
+            .filter(|&(_, node)| !self.tombstones[node as usize])
+            .take(config.rerank_limit())
+            .map(|(_, node)| self.ids[node as usize])
+            .collect()
     }
 }

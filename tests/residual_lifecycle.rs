@@ -124,3 +124,61 @@ fn 残差编码在布局切换增删压缩和显式配置的保存加载中保�
     set_recall_config(RecallConfig::default());
     set_execution_config(ExecutionConfig::default());
 }
+
+#[test]
+fn 残差字典拓扑与单页合表可从映射快照直接恢复() {
+    use quiver_ann::{RerankConfig, RerankPrecision, RerankRepresentation, StorageMode};
+    set_hyperbolic_strategy(HyperbolicStrategy::Full);
+    set_execution_config(ExecutionConfig::default());
+    set_recall_config(RecallConfig::adaptive());
+    set_storage_config(StorageConfig::default());
+    let vectors = clustered_vectors(1536, 64);
+    let mut index = Index::build_poincare(
+        64,
+        &(0..1536u64).collect::<Vec<_>>(),
+        &vectors,
+        &BuildConfig {
+            m: 16,
+            ef_construction: 64,
+            alpha: 1.2,
+        },
+        1.0,
+        PoincareNavigation::GeometryBq2,
+    )
+    .unwrap();
+    assert!(index.residual_cone_count() > 0);
+    index.prepare_colocated_hot_store(true).unwrap();
+    set_storage_config(StorageConfig {
+        colocated_store: true,
+        ..StorageConfig::default()
+    });
+    index
+        .set_rerank_config(RerankConfig {
+            precision: RerankPrecision::Fp16,
+            representation: RerankRepresentation::Polar,
+            ..RerankConfig::default()
+        })
+        .unwrap();
+    let query = &vectors[0..64];
+    let search = SearchConfig {
+        top_k: 10,
+        ef_search: 512,
+        rerank_limit: Some(256),
+    };
+    let expected = index.search(query, &search).unwrap();
+    let topology = index.graph_diagnostics().topology_crc32;
+    let hot = index.navigation_storage_bytes();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("residual.pelorus");
+    index.save_snapshot(&path).unwrap();
+    set_recall_config(RecallConfig::default());
+    let loaded = Index::load_mmap(&path).unwrap();
+    assert_eq!(loaded.storage_mode(), StorageMode::Mmap);
+    assert_eq!(loaded.residual_cone_count(), index.residual_cone_count());
+    assert_eq!(loaded.navigation_storage_bytes(), hot);
+    assert_eq!(loaded.graph_diagnostics().topology_crc32, topology);
+    assert_eq!(loaded.search(query, &search).unwrap(), expected);
+    set_storage_config(StorageConfig::default());
+    set_recall_config(RecallConfig::default());
+    set_execution_config(ExecutionConfig::default());
+}

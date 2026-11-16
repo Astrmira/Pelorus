@@ -8,7 +8,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-**Pelorus** is an in-memory Rust approximate nearest neighbor (ANN) engine designed for native **Poincaré ball** ($`\mathbb{B}_c^D`$) hyperbolic search (as well as standard cosine similarity). It bridges the fidelity–memory dilemma in million-scale non-Euclidean retrieval by decoupling hyperbolic embeddings into a warped product $`\mathbb{R}_{\ge 0} \times \mathbb{S}^{D-1}`$, combining compact 2-bit Sign-Magnitude (SM) spherical codes with exact unquantized radial/conformal metadata and full-precision tail reranking.
+**Pelorus** is a Rust approximate nearest neighbor (ANN) engine with memory-resident navigation and optional SSD-backed cold vectors designed for native **Poincaré ball** ($`\mathbb{B}_c^D`$) hyperbolic search (as well as standard cosine similarity). It bridges the fidelity–memory dilemma in million-scale non-Euclidean retrieval by decoupling hyperbolic embeddings into a warped product $`\mathbb{R}_{\ge 0} \times \mathbb{S}^{D-1}`$, combining compact 2-bit Sign-Magnitude (SM) spherical codes with exact unquantized radial/conformal metadata and full-precision tail reranking.
 
 > **Package Naming Note:** This repository and its accompanying paper use the project name **Pelorus**; for compatibility with frozen benchmark harnesses and existing callers, the Rust crate currently keeps the package name `quiver-ann` (`use quiver_ann::...`). See [`docs/source-migration.md`](docs/source-migration.md) for historical symbol and directory mappings.
 
@@ -150,6 +150,36 @@ fn main() -> quiver_ann::Result<()> {
 
 ---
 
+## SSD Storage & Reranking Precision
+
+```rust,no_run
+use quiver_ann::{Index, RerankConfig, RerankPrecision, ScalarQuantization, StorageMode};
+
+fn main() -> quiver_ann::Result<()> {
+    let mut index = Index::load("vectors.quiver")?;
+    index.set_rerank_config(RerankConfig {
+        precision: RerankPrecision::Sq8,
+        scalar_quantization: ScalarQuantization::Centered,
+        ..RerankConfig::default()
+    })?;
+    index.set_storage_mode(StorageMode::Mmap)?;
+    index.save_snapshot("vectors.pelorus")?;
+    let restored = Index::load_mmap("vectors.pelorus")?;
+    assert_eq!(restored.rerank_config(), index.rerank_config());
+    Ok(())
+}
+```
+
+FP32, FP16, BF16, SQ8 and packed SQ4 are available for reranking. SQ supports per-vector symmetric scales, a shared corpus mean, and grouped affine scales/biases. Polar storage retains an FP64 squared radius and compresses the direction. Cartesian storage optionally adds norm correction. Compressed reranking uses FP64 arithmetic and the original FP32 query.
+
+Encoded memory mode keeps pre-encoded reranking records in RAM and uses file-backed originals for `vector()`, `search_exact()` and maintenance. Encoding/loading prepares 16 bytes of FP64 scoring metadata per record. AVX2 and AVX-512 kernels fuse code reconstruction with FP64 accumulation, with scalar fallback. Storage statistics account for originals, encoded records and prepared metadata separately. Snapshot persistence writes an atomic entry file plus an immutable data file in the same directory, preserving readers of earlier generations. Backups include both files. Loading validates the snapshot and restores its actual graph and navigation state.
+
+Run `cargo run --release --example ssd` for an executable example. The [storage guide](docs/storage.md) describes configurations, updates, file lifecycle and accounting.
+
+On Linux, `Index::open_ssd(path, SsdCacheConfig::default())` enables `O_DIRECT` reranking reads with a bounded 128 MiB shared page cache and a 32 MiB in-flight buffer budget. The default io_uring driver uses one scheduler owning a depth-256 ring with a registered file and buffer slab, merging concurrent page reads and batching submission and completion. Registration pins the entire cache plus in-flight pool and requires sufficient `RLIMIT_MEMLOCK`. `ssd_io_stats()` reports cache hits, physical I/O, registered capacity, batches, peak in-flight reads and kernel IOWQ registration capabilities. Set `cache_bytes` to `512 * 1024 * 1024` for the larger cache.
+
+---
+
 ## Reproducing Paper Figures & Benchmarks
 
 - **Papers**:
@@ -176,6 +206,7 @@ src/
   config.rs                Public BuildConfig & SearchConfig
   geometry.rs              Polar/SM representations & PoincareNavigation modes
   metric.rs                Distance kernels & manifold domain validation
+  storage/                 Cold-vector codecs, mmap base layers & in-memory deltas
   vector.rs                Low-level vector primitives
   research.rs              Research feature hooks, strategy toggles & stage profiling
   index/                   Public Index API, validation, maintenance & persistence

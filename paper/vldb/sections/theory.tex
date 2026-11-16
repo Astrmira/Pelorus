@@ -17,7 +17,7 @@ For the normalized bilinear score $\langle\hat u_q/\sigma_q,\hat u_v/\sigma_v\ra
   + \underbrace{\langle e_q, e_v\rangle}_{\xi_{qv}},
   \label{eq:bilinear_error}
 \end{equation}
-The calibrated score~\eqref{eq:sm_calibration} applies its rational map after this bilinear product. Here $\eta_q(u_v)$ is the first-order query projection, $\eta_v(u_q)$ is the first-order candidate projection, and $\xi_{qv}$ is the second-order cross residual.
+The calibrated hop score~\eqref{eq:sm_calibration} applies its rational map after this bilinear product (while \textsc{Stage-0.5} evaluates the uncalibrated linear projection directly at $e_q = 0$). Here $\eta_q(u_v)$ is the first-order query projection, $\eta_v(u_q)$ is the first-order candidate projection, and $\xi_{qv}$ is the second-order cross residual.
 In flat cosine ranking ($W \equiv 1$), comparing angularly close candidates $u_x, u_y$ subtracts $\eta_q(u_x) - \eta_q(u_y) = \langle e_q, u_x - u_y\rangle$, with variance $(u_x-u_y)^\top\Sigma_q(u_x-u_y)$ for $\Sigma_q=\Cov(e_q)$. The scaling $\|\Sigma_q\|_2=O(1/D)$ gives standard deviation $O(\|u_x-u_y\|_2/\sqrt D)$~\cite{xiao2026decisions}.
 On $\Bball$, conformal radial weights reshape this behavior in four distinct ways.
 

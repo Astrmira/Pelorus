@@ -1,9 +1,10 @@
-//! 面向独立使用场景的内存向量索引封装。
+//! 支持内存与 SSD 冷向量的独立索引封装。
 
 use crate::geometry::PoincareNavigation;
 use crate::graph::NativeSpace;
 use crate::graph::QuIVer;
 use crate::metric::{Metric, poincare_distance, poincare_proxy};
+use crate::storage::{Buffer, ColdStore};
 use crate::vector::cosine_similarity_f32;
 use crate::{BuildConfig, SearchConfig};
 use rayon::prelude::*;
@@ -16,7 +17,9 @@ const NEXT_SEED: u64 = 0x9E37_79B9_7F4A_7C15;
 /// 自带原始向量存储、可直接构建、维护和持久化的 QuIVer 索引。
 pub struct Index {
     graph: QuIVer,
-    vectors: Vec<f32>,
+    vectors: Buffer<f32>,
+    rerank: Option<ColdStore>,
+    storage_mode: crate::StorageMode,
     ids: Vec<u64>,
     active: Vec<bool>,
     id_to_slot: HashMap<u64, usize>,
@@ -55,7 +58,7 @@ impl Index {
         )
     }
 
-    /// 显式选择双曲构图、剪枝和导航使用的距离表示，返回值按精确测地距离排序。
+    /// 显式选择双曲构图、剪枝和导航表示，默认以原始 FP32 坐标精排。
     pub fn build_poincare(
         dimensions: usize,
         ids: &[u64],
@@ -138,6 +141,8 @@ impl Index {
             Metric::Poincare { curvature } => {
                 let space = NativeSpace {
                     vectors,
+                    delta: &[],
+                    rerank: None,
                     boundary_factors: &boundary_factors,
                     dimensions,
                     curvature,
@@ -154,7 +159,9 @@ impl Index {
         }
         Ok(Self {
             graph,
-            vectors: vectors.to_vec(),
+            vectors: Buffer::owned(vectors.to_vec()),
+            rerank: None,
+            storage_mode: crate::StorageMode::Memory,
             ids: ids.to_vec(),
             active: vec![true; count],
             id_to_slot: ids
@@ -196,8 +203,7 @@ impl Index {
 
     pub fn vector(&self, id: u64) -> Option<&[f32]> {
         let &slot = self.id_to_slot.get(&id)?;
-        let start = slot * self.dimensions;
-        Some(&self.vectors[start..start + self.dimensions])
+        Some(self.vectors.row(slot, self.dimensions))
     }
 
     pub fn config(&self) -> BuildConfig {
@@ -214,6 +220,8 @@ impl Index {
 }
 
 mod persistence;
+mod snapshot;
+mod storage;
 
 mod error;
 pub use error::{Error, Result};

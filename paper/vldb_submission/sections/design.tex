@@ -15,7 +15,7 @@ Figure~\ref{fig:geometry_overview} summarizes the geometry and representation. W
 \label{subsec:polar_layout}
 
 Let $\varepsilon_\angle(q, v) \triangleq \hat{\gamma}(u_q, u_v) - \gamma_{qv}$ be directional error in $\widehat{P}_{\mathbb{B}}(q, v) = R(r_q, r_v) + W(r_q, r_v)(1 - \hat{\gamma}(u_q, u_v))$.
-For bilinear score $\langle \hat{u}_q/\sigma_q, \hat{u}_v/\sigma_v\rangle$ (before~\eqref{eq:sm_calibration}) with $e_z = \hat{u}_z / \sigma_z - u_z$, bilinear decomposition~\cite{bussgang1952crosscorrelation,xiao2026decisions} gives $\varepsilon_\angle(q, v) = \eta_q(u_v) + \eta_v(u_q) + \xi_{qv}$ ($\eta_q(u_v) = \langle e_q, u_v\rangle$, $\eta_v(u_q) = \langle u_q, e_v\rangle$, $\xi_{qv} = \langle e_q, e_v\rangle$).
+For the uncalibrated bilinear product $\langle \hat{u}_q/\sigma_q, \hat{u}_v/\sigma_v\rangle$ (ahead of~\eqref{eq:sm_calibration}, and directly matching \textsc{Stage-0.5} at $e_q = 0$) with $e_z = \hat{u}_z / \sigma_z - u_z$, bilinear decomposition~\cite{bussgang1952crosscorrelation,xiao2026decisions} gives $\varepsilon_\angle(q, v) = \eta_q(u_v) + \eta_v(u_q) + \xi_{qv}$ ($\eta_q(u_v) = \langle e_q, u_v\rangle$, $\eta_v(u_q) = \langle u_q, e_v\rangle$, $\xi_{qv} = \langle e_q, e_v\rangle$).
 In flat cosine search ($W \equiv 1$), $\eta_q(u_x) - \eta_q(u_y) = \langle e_q, u_x - u_y\rangle$ has variance $(u_x - u_y)^\top\Sigma_q(u_x - u_y)$ ($\Sigma_q = \Cov(e_q)$, $\|\Sigma_q\|_2 = O(1/D)$), giving standard deviation $O(\|u_x - u_y\|_2/\sqrt{D})$~\cite{xiao2026decisions}. On $\Bball$, conformal weights alter this cancellation.
 
 \begin{theorem}[Conformal Flip Criterion, Depth Invariance, and Lorentz-MIPS Blowup]
@@ -44,25 +44,26 @@ Guided by Theorem~\ref{thm:conformal_flip}, \rquiver{} projects $\Lmod \to \Bbal
 (1)~unquantized FP32 radial scalars $(r_v, F_v, \rho_v)$ ($12$\,B, $F_v = (1 - c r_v^2)^{-1} = f_v/2$, computed in FP64),
 (2)~FP32 {SM} scalars $(a_v, \delta_v, \sigma_v)$ ($12$\,B) for hop scoring and \textsc{Stage-0.5}, and
 (3)~a 32-bit word packing 20-bit $s_v$ and 12-bit $\text{cone\_id}$ (\texttt{0x0FFF} for global {SM}) plus an FP32 slot ($8$\,B) storing $\alpha_v = \langle u_v, \mu_c\rangle$ on cones or $(D + 3 s_v)^{-1/2}$ on global legacy paths.
-At $D = 768, M_0 = 32$ (Table~\ref{tab:node_layout}), logical payload is $352$\,B/vertex ($485.0$\,MB split or $517.0$\,MB page-co-located; full byte audit in the supplemental material), $2.60\times$ smaller than {Polar-SQ8} ($1{,}261.0$\,MB) and $7.35\times$ smaller than {Polar-FP32} ($3{,}565.0$\,MB).
+At $D = 768, M_0 = 32$ (Table~\ref{tab:node_layout}), logical per-vertex state is $384$\,B with \texttt{SymSketch256} ($517.0$\,MB page-co-located, $2.44\times$ below {Polar-SQ8} at $1{,}261.0$\,MB and $6.90\times$ below {Polar-FP32} at $3{,}565.0$\,MB) or $352$\,B without the sketch ($485.0$\,MB split, $2.60\times$ and $7.35\times$ smaller).
 
 \begin{table}[t]
   \centering
-  \caption{Per-vertex representation payload at $D=768, M_0=32$ ($N=1\text{M}$). On the 2-bit and SQ8 paths, source FP32 vectors enter final reranking.}
+  \caption{Per-vertex logical payload and {Cohere-1M} byte reconciliation ($D=768, M_0=32, N=10^6$). Cold FP32 vectors enter final reranking on the 2-bit and SQ8 paths.}
   \label{tab:node_layout}
   \footnotesize
   \setlength{\tabcolsep}{3.5pt}
   \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}Xrrrr@{}}
     \toprule
-    \textbf{Representation} & \textbf{Meta} & \textbf{Dir.\ Code} & \textbf{Edge Slots} & \textbf{Payload} \\
+    \textbf{Representation} & \textbf{Header} & \textbf{Dir.\ Code} & \textbf{Active Edges} & \textbf{Logical} \\
     \midrule
     Full-Vector Nav (FP32) & 32\,B & 3,072\,B & 128\,B & 3,232\,B \\
     Polar-SQ8 (8-bit dir.) & 32\,B & 768\,B & 128\,B & 928\,B \\
-    \textbf{\rquiver{} (2-bit SM + Cone)} & \textbf{32\,B} & \textbf{192\,B} & \textbf{128\,B} & \textbf{352\,B$^\dagger$} \\
+    \rquiver{}-Split (no sketch) & 32\,B & 192\,B & 128\,B & 352\,B$^\dagger$ \\
+    \textbf{\rquiver{} (\texttt{HotSmPage})} & \textbf{64\,B} & \textbf{192\,B} & \textbf{128\,B} & \textbf{384\,B$^\dagger$} \\
     \bottomrule
   \end{tabularx}
   \par\vspace{1pt}
-  {\scriptsize $^\dagger$Measured navigation allocation (64-slot fixed-stride adjacency + $4$\,MB degree words + $0.975$\,MB router) is $485.0$\,MB split and $517.0$\,MB with $4096$\,B \texttt{HotSmPage}. The measured SQ8/FP32 controls each retain $192$\,MB of 2-bit storage and $8$\,MB of inverse norms. \texttt{ResidualConeDict} adds $0$\,B/vertex ($4CD$\,B global for $C \le 512$, or $0.50$\,MiB at $C=256, D=512$).}
+  {\scriptsize\raggedright\noindent $^\dagger$Active edges count $M_0=32$ \texttt{u32} IDs ($128$\,B); the fixed-stride graph allocates $64$ \texttt{u32} slots/vertex ($256.0$\,MB: $128$\,MB active + $128$\,MB in-place reverse-insertion slack), $4.0$\,MB degree words, and $0.975$\,MB router arrays. Summing decimal MB gives $32+192+256+4+0.975 = \mathbf{484.975}$\,\textbf{MB} (split) and $256\text{ (\texttt{HotSmPage}: }32\text{\,B meta}+32\text{\,B sketch}+192\text{\,B bits)}+256+4+0.975 = \mathbf{516.975}$\,\textbf{MB} (full \rquiver{}). {Polar-SQ8}/\text{-FP32} retain the $484.975$\,MB base plus $8.0$\,MB FP64 inverse norms ($492.975$\,MB) and add $768.0$\,MB SQ8 ($1{,}260.975$\,MB) or $3{,}072.0$\,MB FP32 ($3{,}564.975$\,MB). \texttt{ResidualConeDict} adds $0$\,B/vertex ($4CD$\,B global, $0.50$\,MiB at $C=256, D=512$).\par}
 \end{table}
 
 \subsection{Boundary Margin Collapse and Purity-Gated \texttt{ResidualConeDict}}
@@ -90,7 +91,7 @@ Axial terms $\alpha_{q,c}\alpha$ cancel in $\Psi_{\mathrm{rank}}$, so $\Var(X - 
 \rquiver{} adapts residual normalization~\cite{jegou2011pq} to $\Sunit$ without perturbing diffuse contrastive manifolds~\cite{wang2020understanding,betser2026infonce,xiao2026decisions} via a build-time purity check over $\min(N, 8{,}192)$ samples.
 If $p_{90}(\rho) < 1.0$, \texttt{ResidualConeDict} exits with $0$ cones. Otherwise a spherical leader pass ($\tau_{\mathrm{lead}} = 0.91$, $\le 1{,}024$ seeds) and two spherical-mean rounds ($\langle u_s, \mu_c\rangle \ge 0.94$) retain at most $C \le 512$ axes meeting support $\operatorname{clamp}(\lfloor N_{\mathrm{samp}}/1024\rfloor, 3, 12)$ and purity $\bar{\alpha}_c \ge 0.955$.
 Vertices with $\alpha_v \ge 0.94$ store the 2-bit {SM} code of $\tilde{r}_v$ in the existing bitplane slot and record $\text{cone\_id}$ in the 12-bit header (\textbf{0\,B/vertex} overhead, $\beta_v^2 \le 0.1164$).
-All four real benchmarks retain $0$ cones, whereas both synthetic clustered benchmarks retain $256$ cones ($0.50$\,MiB at $D=512$).
+Setting $\alpha_{\min} = 0.94$ and $\bar{\alpha}_c \ge 0.955$ activates residual coding only when tight concentration ($\beta_v^2 \le 0.1164$) outweighs axis-projection cost: all four diffuse real datasets pass through on the zero-overhead global path ($0$ cones), whereas both clustered benchmarks activate all $256$ cones ($0.50$\,MiB at $D=512$).
 
 \subsection{Hyperbolic Vamana Pathologies, QuadriPrune, and Chord-Swap Repair}
 \label{subsec:compass}
@@ -155,8 +156,8 @@ enforcing the angular guard and rejecting $\alpha|\rho_w - \rho_v| > \tilde{d}_{
   J_{\mathrm{elev}}(u, v) \triangleq \ell_\angle(u, v) + 0.15\bigl||\rho_v - \rho_u| - 0.65\bigr|,
   \label{eq:elevator_obj}
 \end{equation}
-followed by diversity fill ($\ell_\angle + 0.25|\rho_u - \rho_v|$, $|\rho_w - \rho_v| \le 1.0$) and ordered fill (at constant depth, elevator sets are empty and the ring prunes by angle; details in the supplemental material).
-The chord-swap pass repairs the $518\text{--}626$ boundary islands on {Cohere-1M} while preserving tree edges, yielding $0$ islands ($1{,}000{,}000 / 1{,}000{,}000$ reachable) across all 21 million-scale {Zen~4} graphs ($<0.3$\,s).
+followed by diversity fill ($\ell_\angle + 0.25|\rho_u - \rho_v|$, $|\rho_w - \rho_v| \le 1.0$) and ordered fill (with fixed dataset-independent quotas and tolerances; at constant depth, elevator sets are empty and the ring prunes by angle).
+The chord-swap pass repairs the $518\text{--}626$ zero-in-degree boundary islands on {Cohere-1M} while preserving tree edges, achieving $1{,}000{,}000 / 1{,}000{,}000$ directed {BFS} reachability from the entry hub ($0$ islands) across all 21 million-scale {Zen~4} graphs in $<0.3$\,s.
 
 \subsection{Ray Strong Convexity and \texttt{PolarRouter}}
 \label{subsec:router}

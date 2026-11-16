@@ -18,6 +18,8 @@ pub(crate) type Candidate = (Distance, u32);
 /// 边界因子由拥有向量的 Index 维护，不在每次距离计算时重复求范数。
 pub(crate) struct NativeSpace<'a> {
     pub vectors: &'a [f32],
+    pub delta: &'a [f32],
+    pub rerank: Option<&'a crate::storage::ColdStore>,
     pub boundary_factors: &'a [f64],
     pub dimensions: usize,
     pub curvature: f64,
@@ -25,7 +27,12 @@ pub(crate) struct NativeSpace<'a> {
 impl NativeSpace<'_> {
     #[inline]
     pub(crate) fn vector(&self, slot: usize) -> &[f32] {
-        &self.vectors[slot * self.dimensions..(slot + 1) * self.dimensions]
+        let offset = slot * self.dimensions;
+        if offset < self.vectors.len() {
+            &self.vectors[offset..offset + self.dimensions]
+        } else {
+            &self.delta[offset - self.vectors.len()..offset - self.vectors.len() + self.dimensions]
+        }
     }
 
     #[inline]
@@ -33,7 +40,7 @@ impl NativeSpace<'_> {
         #[cfg(target_arch = "x86_64")]
         unsafe {
             use std::arch::x86_64::{_MM_HINT_T0, _mm_prefetch};
-            let ptr = self.vectors.as_ptr().add(slot * self.dimensions) as *const i8;
+            let ptr = self.vector(slot).as_ptr() as *const i8;
             let bytes = self.dimensions * 4;
             _mm_prefetch(ptr, _MM_HINT_T0);
             if bytes > 64 {
@@ -89,5 +96,43 @@ impl NativeSpace<'_> {
             self.vector(slot),
             query_factor * self.boundary_factors[slot],
         )
+    }
+
+    pub(crate) fn prefetch_rerank(&self, slot: usize) {
+        if let Some(store) = self.rerank {
+            store.prefetch(slot);
+        } else {
+            self.prefetch_vector(slot);
+        }
+    }
+
+    pub(crate) fn rerank_proxy(
+        &self,
+        query: &[f32],
+        factor: f64,
+        slot: usize,
+        trace_slow: bool,
+        buffer: &mut crate::storage::RerankScratch,
+    ) -> crate::Result<f64> {
+        if let Some(store) = self.rerank {
+            #[cfg(feature = "research")]
+            if trace_slow {
+                trace_query(|t| {
+                    t.raw_slots.insert(slot);
+                    t.exact_evals += 1;
+                });
+            }
+            store.score(
+                query,
+                factor,
+                slot,
+                crate::Metric::Poincare {
+                    curvature: self.curvature,
+                },
+                buffer,
+            )
+        } else {
+            Ok(self.proxy_fast(query, factor, slot, trace_slow))
+        }
     }
 }

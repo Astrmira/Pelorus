@@ -1,4 +1,4 @@
-% PVLDB 论文主文件：基于官方 acmart (sigconf, nonacm) 模板构建
+% 预印本完整版论文主文件：基于 acmart (sigconf, nonacm) 模板构建，适用于 arXiv 上传
 % 注意：acmart 已内置加载 newtxmath、xcolor 与 hyperref，请勿重复加载 amssymb 以免 \Bbbk 冲突
 
 \documentclass[sigconf, nonacm, balance=false]{acmart}
@@ -56,16 +56,8 @@
 \DeclareMathOperator*{\argmin}{arg\,min}
 \DeclareMathOperator*{\argmax}{arg\,max}
 
-% PVLDB 元数据配置（投稿阶段保留官方占位符，录用后替换为正式卷期页码）
-\newcommand\vldbdoi{XX.XX/XXX.XX}
-\newcommand\vldbpages{XXX-XXX}
-\newcommand\vldbvolume{20}
-\newcommand\vldbissue{1}
-\newcommand\vldbyear{2027}
-\newcommand\vldbauthors{\authors}
-\newcommand\vldbtitle{\shorttitle}
-\newcommand\vldbavailabilityurl{https://github.com/Astrmira/Pelorus}
-\newcommand\vldbpagestyle{plain}
+% 开源代码与实验工件仓库地址
+\newcommand\codeavailabilityurl{https://github.com/Astrmira/Pelorus}
 
 \begin{document}
 
@@ -92,26 +84,12 @@
 
 \maketitle
 
-% PVLDB 官方格式声明块（请勿修改内部排版宏）
-\pagestyle{\vldbpagestyle}
-\begingroup\small\noindent\raggedright\textbf{PVLDB Reference Format:}\\
-\vldbauthors. \vldbtitle. PVLDB, \vldbvolume(\vldbissue): \vldbpages, \vldbyear.\\
-\href{https://doi.org/\vldbdoi}{doi:\vldbdoi}
-\endgroup
-\begingroup
-\renewcommand\thefootnote{}\footnote{\noindent
-This work is licensed under the Creative Commons BY-NC-ND 4.0 International License. Visit \url{https://creativecommons.org/licenses/by-nc-nd/4.0/} to view a copy of this license. For any use beyond those covered by this license, obtain permission by emailing \href{mailto:info@vldb.org}{info@vldb.org}. Copyright is held by the owner/author(s). Publication rights licensed to the VLDB Endowment. \\
-\raggedright Proceedings of the VLDB Endowment, Vol. \vldbvolume, No. \vldbissue\ %
-ISSN 2150-8097. \\
-\href{https://doi.org/\vldbdoi}{doi:\vldbdoi} \\
-}\addtocounter{footnote}{-1}\endgroup
-
-\ifdefempty{\vldbavailabilityurl}{}{
+% 预印本页眉页脚样式与开源代码说明（已移除 PVLDB 引用格式、Endowment 版权页脚与刊物标识符）
+\pagestyle{plain}
 \vspace{.3cm}
-\begingroup\small\noindent\raggedright\textbf{PVLDB Artifact Availability:}\\
-The source code, data, and/or other artifacts have been made available at \url{\vldbavailabilityurl}.
+\begingroup\small\noindent\raggedright\textbf{Code \& Artifact Availability:}\\
+The source code, data, and/or other artifacts are available at \url{\codeavailabilityurl}.
 \endgroup
-}
 
 % 正文各章节模块化引入
 \input{sections/introduction}
