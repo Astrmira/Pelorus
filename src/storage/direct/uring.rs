@@ -547,4 +547,115 @@ mod tests {
         // 单页直读采用零拷贝页内切片返回，不再额外复制填充 scratch.bytes。
         assert!(scratch.bytes.is_empty());
     }
+
+    #[test]
+    fn io_uring小缓存十七页预算高并发批处理与回退读取不死锁() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        let stride = 1025;
+        let pages = 64usize;
+        let total_bytes = pages * PAGE + stride;
+        let slots_total = total_bytes / stride;
+        let bytes = (0..total_bytes)
+            .map(|i| ((i * 97 + i / PAGE) % 251) as u8)
+            .collect::<Vec<_>>();
+        file.write_all(&bytes).unwrap();
+        file.as_file().sync_all().unwrap();
+
+        let reader = DirectReader::from_file(
+            file.as_file().try_clone().unwrap(),
+            0,
+            bytes.len(),
+            SsdCacheConfig {
+                cache_bytes: 16 * PAGE,
+                inflight_bytes: PAGE,
+                io_workers: 1,
+                prefetch_window: 16,
+                driver: SsdIoDriver::IoUring,
+            },
+        )
+        .unwrap();
+
+        let workers = 20usize;
+        let prepared_barrier = std::sync::Barrier::new(workers + 1);
+        let release_barrier = std::sync::Barrier::new(workers + 1);
+        std::thread::scope(|scope| {
+            for worker in 0..workers {
+                let reader = &reader;
+                let bytes = &bytes;
+                let prepared_barrier = &prepared_barrier;
+                let release_barrier = &release_barrier;
+                scope.spawn(move || {
+                    let mut scratch = DirectScratch::default();
+                    let slots = [
+                        (worker * 5) % slots_total,
+                        ((worker + 17) * 5) % slots_total,
+                        ((worker + 31) * 5 + 3) % slots_total,
+                    ];
+                    reader.prepare_rerank_batch(&slots, stride, &mut scratch);
+                    prepared_barrier.wait();
+                    release_barrier.wait();
+
+                    for round in 0..10usize {
+                        if round > 0 {
+                            let s0 = ((worker * 7 + round * 11) * 3) % slots_total;
+                            let s1 = ((worker + round * 13 + 23) * 5) % slots_total;
+                            let s2 = (s0 + 17) % slots_total;
+                            reader.prepare_rerank_batch(&[s0, s1, s2], stride, &mut scratch);
+                            let round_slots = [s0, s1, s2];
+                            let mut misses = Vec::new();
+                            for (pos, &slot) in round_slots.iter().enumerate() {
+                                if reader.is_slot_ready(pos, &scratch) {
+                                    assert_eq!(
+                                        reader
+                                            .record_prepared(pos, slot, stride, &mut scratch)
+                                            .unwrap(),
+                                        &bytes[slot * stride..(slot + 1) * stride]
+                                    );
+                                } else {
+                                    misses.push(pos);
+                                }
+                            }
+                            for pos in misses {
+                                let _ = reader.try_upgrade_slot_ready(pos, &mut scratch).unwrap();
+                                let slot = round_slots[pos];
+                                assert_eq!(
+                                    reader
+                                        .record_prepared(pos, slot, stride, &mut scratch)
+                                        .unwrap(),
+                                    &bytes[slot * stride..(slot + 1) * stride]
+                                );
+                            }
+                        } else {
+                            for (pos, &slot) in slots.iter().enumerate() {
+                                assert_eq!(
+                                    reader
+                                        .record_prepared(pos, slot, stride, &mut scratch)
+                                        .unwrap(),
+                                    &bytes[slot * stride..(slot + 1) * stride]
+                                );
+                            }
+                        }
+                        reader.finish_rerank_batch(&mut scratch);
+                    }
+                });
+            }
+
+            prepared_barrier.wait();
+            let mut extra = DirectScratch::default();
+            let probe_slot = slots_total - 2;
+            assert_eq!(
+                reader.record(probe_slot, stride, &mut extra).unwrap(),
+                &bytes[probe_slot * stride..(probe_slot + 1) * stride]
+            );
+            drop(extra);
+            release_barrier.wait();
+        });
+
+        reader.clear();
+        let stats = reader.stats();
+        assert_eq!(stats.uring_submitted, stats.uring_completed);
+        assert_eq!(stats.cache_current_bytes, 0);
+        assert_eq!(stats.pool_live_bytes, 0);
+        assert!(stats.pool_peak_live_bytes <= 17 * PAGE);
+    }
 }

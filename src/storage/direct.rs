@@ -195,6 +195,22 @@ impl Pending {
             ready: Condvar::new(),
         }
     }
+    /// 无锁检查异步页读取是否已完成（不克隆页句柄）。
+    #[inline]
+    fn is_done(&self) -> bool {
+        self.done.load(Ordering::Acquire)
+    }
+    /// 非阻塞探测异步页结果而不增加页引用计数。
+    #[inline]
+    fn check_ready(&self) -> Option<Result<()>> {
+        if !self.done.load(Ordering::Acquire) {
+            return None;
+        }
+        Some(match self.result.lock().unwrap().as_ref().unwrap() {
+            Ok(_) => Ok(()),
+            Err(error) => Err(error.clone()),
+        })
+    }
     #[inline]
     fn try_ready(&self) -> Option<Result<Arc<Page>>> {
         if !self.done.load(Ordering::Acquire) {
@@ -276,6 +292,20 @@ impl Shared {
                 Entry::Loading(Arc::clone(pending))
             }
         })
+    }
+
+    /// 仅非阻塞探测页是否已就绪（不计入缓存命中统计，供小缓存非固定批状态推进）。
+    fn is_page_ready(&self, page: u64) -> Result<bool> {
+        let cache = self.caches[page as usize % SHARDS].read().unwrap();
+        match cache.entries.get(&page) {
+            Some(Entry::Ready(_)) => Ok(true),
+            Some(Entry::Loading(pending)) => match pending.check_ready() {
+                Some(Ok(())) => Ok(true),
+                Some(Err(error)) => Err(error),
+                None => Ok(false),
+            },
+            None => Ok(false),
+        }
     }
 
     fn request(&self, page: u64, prefetch: bool) -> Result<Option<Entry>> {
@@ -514,6 +544,8 @@ pub(crate) struct DirectReader {
 enum BatchPageState {
     Ready(Arc<Page>, bool),
     Loading(Arc<Pending>),
+    Cached(u64),
+    Queued(u64),
     Demand(u64),
 }
 
@@ -560,6 +592,21 @@ impl DirectScratch {
         self.cached_hits_acc = 0;
         self.pending_hits_acc = 0;
         self.query_page_hits_acc = 0;
+    }
+
+    /// 在阻塞等待 I/O 前释放批内已固定页句柄与待决引用，防止小缓存并发持满全部租约。
+    #[inline]
+    fn release_pinned_pages(&mut self) {
+        self.last = None;
+        self.last_page_idx = None;
+        for (page, state) in &mut self.batch_pages {
+            if matches!(
+                state,
+                BatchPageState::Ready(_, _) | BatchPageState::Loading(_)
+            ) {
+                *state = BatchPageState::Demand(*page);
+            }
+        }
     }
 }
 
@@ -719,6 +766,33 @@ impl DirectReader {
         (v > 0.0 && v.is_finite()).then_some(v)
     }
 
+    /// 当缓冲池容量与在途预算充足时才在批内直接固定页句柄；小缓存只记录页号以防并发占满租约。
+    #[inline]
+    fn pin_cached(&self) -> bool {
+        self.shared.pending_limit >= 2 && self.shared.pool.limit >= 64
+    }
+
+    /// 将缓存条目转换为批页状态：大缓存固定句柄，小缓存仅记录页号。
+    #[inline]
+    fn batch_state_from_entry(page: u64, entry: &Entry, pin_cached: bool) -> BatchPageState {
+        match entry {
+            Entry::Ready(data) => {
+                if pin_cached {
+                    BatchPageState::Ready(Arc::clone(data), false)
+                } else {
+                    BatchPageState::Cached(page)
+                }
+            }
+            Entry::Loading(pending) => {
+                if pin_cached {
+                    BatchPageState::Loading(Arc::clone(pending))
+                } else {
+                    BatchPageState::Queued(page)
+                }
+            }
+        }
+    }
+
     /// 批量预解析并一次加锁入队全部缺失页，消除滑动小波次带来的碎片化 io_uring 提交与重复锁查找。
     pub(crate) fn prepare_rerank_batch(
         &self,
@@ -858,6 +932,7 @@ impl DirectReader {
                 .fetch_add(prefetched_touches, Ordering::Relaxed);
         }
 
+        let pin = self.pin_cached();
         let mut has_misses = false;
         for shard in 0..SHARDS {
             let bucket = &scratch.shard_buckets[shard];
@@ -868,12 +943,9 @@ impl DirectReader {
             for &u_idx in bucket {
                 let page = scratch.batch_pages[u_idx].0;
                 match guard.entries.get(&page) {
-                    Some(Entry::Ready(data)) => {
+                    Some(entry) => {
                         scratch.batch_pages[u_idx].1 =
-                            BatchPageState::Ready(Arc::clone(data), false);
-                    }
-                    Some(Entry::Loading(pending)) => {
-                        scratch.batch_pages[u_idx].1 = BatchPageState::Loading(Arc::clone(pending));
+                            Self::batch_state_from_entry(page, entry, pin);
                     }
                     None => {
                         if enqueue_all {
@@ -950,6 +1022,7 @@ impl DirectReader {
 
     /// 在单一 `queue` 锁内依次检查写分片缓存并发布缺失页任务，最后唤醒一次 I/O 工作线程。
     fn enqueue_shard_misses(&self, scratch: &mut DirectScratch) {
+        let pin = self.pin_cached();
         let mut pushed = 0u64;
         let mut skipped = 0u64;
         {
@@ -968,13 +1041,9 @@ impl DirectReader {
                     for &u_idx in misses {
                         let page = scratch.batch_pages[u_idx].0;
                         match guard.entries.get(&page) {
-                            Some(Entry::Ready(data)) => {
+                            Some(entry) => {
                                 scratch.batch_pages[u_idx].1 =
-                                    BatchPageState::Ready(Arc::clone(data), false);
-                            }
-                            Some(Entry::Loading(pending)) => {
-                                scratch.batch_pages[u_idx].1 =
-                                    BatchPageState::Loading(Arc::clone(pending));
+                                    Self::batch_state_from_entry(page, entry, pin);
                             }
                             None => {
                                 if avail > 0 {
@@ -989,7 +1058,11 @@ impl DirectReader {
                                         result: Arc::clone(&pending),
                                         prefetched: true,
                                     });
-                                    scratch.batch_pages[u_idx].1 = BatchPageState::Loading(pending);
+                                    scratch.batch_pages[u_idx].1 = if pin {
+                                        BatchPageState::Loading(pending)
+                                    } else {
+                                        BatchPageState::Queued(page)
+                                    };
                                 } else {
                                     skipped += 1;
                                 }
@@ -1019,14 +1092,14 @@ impl DirectReader {
     #[inline]
     pub(crate) fn is_slot_ready(&self, pos: usize, scratch: &DirectScratch) -> bool {
         let Some(&mapping) = scratch.slot_mappings.get(pos) else {
-            return true;
+            return false;
         };
         match mapping {
-            SlotMapping::Fallback => true,
+            SlotMapping::Fallback => false,
             SlotMapping::Single { batch_idx, .. } => {
                 matches!(
                     scratch.batch_pages[batch_idx].1,
-                    BatchPageState::Ready(_, _)
+                    BatchPageState::Ready(_, _) | BatchPageState::Cached(_)
                 )
             }
             SlotMapping::Multi {
@@ -1035,7 +1108,10 @@ impl DirectReader {
                 ..
             } => (0..page_count).all(|k| {
                 let idx = scratch.multi_page_indices[first_ref + k];
-                matches!(scratch.batch_pages[idx].1, BatchPageState::Ready(_, _))
+                matches!(
+                    scratch.batch_pages[idx].1,
+                    BatchPageState::Ready(_, _) | BatchPageState::Cached(_)
+                )
             }),
         }
     }
@@ -1047,32 +1123,52 @@ impl DirectReader {
         scratch: &mut DirectScratch,
     ) -> Result<bool> {
         let Some(&mapping) = scratch.slot_mappings.get(pos) else {
-            return Ok(true);
+            return Ok(false);
         };
         match mapping {
-            SlotMapping::Fallback => Ok(true),
-            SlotMapping::Single { batch_idx, .. } => Self::try_upgrade_page(batch_idx, scratch),
+            SlotMapping::Fallback => Ok(false),
+            SlotMapping::Single { batch_idx, .. } => self.try_upgrade_page(batch_idx, scratch),
             SlotMapping::Multi {
                 first_ref,
                 page_count,
                 ..
             } => {
-                let mut all_ready = true;
+                // 跨页条目仅在关联物理页全部无需等待时整体升级，避免部分页提前固定租约。
                 for k in 0..page_count {
                     let idx = scratch.multi_page_indices[first_ref + k];
-                    if !Self::try_upgrade_page(idx, scratch)? {
-                        all_ready = false;
+                    if !self.is_batch_page_ready(idx, scratch)? {
+                        return Ok(false);
                     }
                 }
-                Ok(all_ready)
+                for k in 0..page_count {
+                    let idx = scratch.multi_page_indices[first_ref + k];
+                    if !self.try_upgrade_page(idx, scratch)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
             }
         }
     }
 
     #[inline]
-    fn try_upgrade_page(batch_idx: usize, scratch: &mut DirectScratch) -> Result<bool> {
+    fn is_batch_page_ready(&self, batch_idx: usize, scratch: &DirectScratch) -> Result<bool> {
         match &scratch.batch_pages[batch_idx].1 {
-            BatchPageState::Ready(_, _) => Ok(true),
+            BatchPageState::Ready(_, _) | BatchPageState::Cached(_) => Ok(true),
+            BatchPageState::Loading(pending) => match pending.check_ready() {
+                Some(Ok(())) => Ok(true),
+                Some(Err(error)) => Err(error),
+                None => Ok(false),
+            },
+            BatchPageState::Queued(page) => self.shared.is_page_ready(*page),
+            BatchPageState::Demand(_) => Ok(false),
+        }
+    }
+
+    #[inline]
+    fn try_upgrade_page(&self, batch_idx: usize, scratch: &mut DirectScratch) -> Result<bool> {
+        match &scratch.batch_pages[batch_idx].1 {
+            BatchPageState::Ready(_, _) | BatchPageState::Cached(_) => Ok(true),
             BatchPageState::Loading(pending) => match pending.try_ready() {
                 Some(Ok(page)) => {
                     scratch.batch_pages[batch_idx].1 = BatchPageState::Ready(page, true);
@@ -1081,24 +1177,40 @@ impl DirectReader {
                 Some(Err(error)) => Err(error),
                 None => Ok(false),
             },
+            BatchPageState::Queued(page) => {
+                let page = *page;
+                if self.shared.is_page_ready(page)? {
+                    scratch.batch_pages[batch_idx].1 = BatchPageState::Cached(page);
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
             BatchPageState::Demand(_) => Ok(false),
+        }
+    }
+
+    #[inline]
+    fn account_ready_hit(batch_idx: usize, scratch: &mut DirectScratch) {
+        if let BatchPageState::Ready(_, from_loading) = &mut scratch.batch_pages[batch_idx].1 {
+            if scratch.last_page_idx == Some(batch_idx) {
+                scratch.query_page_hits_acc += 1;
+            } else if *from_loading {
+                *from_loading = false;
+                scratch.pending_hits_acc += 1;
+                scratch.last_page_idx = Some(batch_idx);
+            } else {
+                scratch.cached_hits_acc += 1;
+                scratch.last_page_idx = Some(batch_idx);
+            }
         }
     }
 
     #[inline]
     fn resolve_batch_page_ready(batch_idx: usize, scratch: &mut DirectScratch) -> Result<()> {
         match &mut scratch.batch_pages[batch_idx].1 {
-            BatchPageState::Ready(_, from_loading) => {
-                if scratch.last_page_idx == Some(batch_idx) {
-                    scratch.query_page_hits_acc += 1;
-                } else if *from_loading {
-                    *from_loading = false;
-                    scratch.pending_hits_acc += 1;
-                    scratch.last_page_idx = Some(batch_idx);
-                } else {
-                    scratch.cached_hits_acc += 1;
-                    scratch.last_page_idx = Some(batch_idx);
-                }
+            BatchPageState::Ready(_, _) => {
+                Self::account_ready_hit(batch_idx, scratch);
                 Ok(())
             }
             BatchPageState::Loading(pending) => {
@@ -1108,8 +1220,28 @@ impl DirectReader {
                 scratch.last_page_idx = Some(batch_idx);
                 Ok(())
             }
-            BatchPageState::Demand(_) => unreachable!(),
+            BatchPageState::Cached(_) | BatchPageState::Queued(_) | BatchPageState::Demand(_) => {
+                unreachable!()
+            }
         }
+    }
+
+    #[inline]
+    fn store_single_last_page(
+        batch_idx: usize,
+        page_num: u64,
+        lo: usize,
+        hi: usize,
+        page: Arc<Page>,
+        scratch: &mut DirectScratch,
+    ) -> Result<&[u8]> {
+        page.consume();
+        if hi > page.valid {
+            return Err(Error::CorruptIndex("SSD 页不包含完整记录"));
+        }
+        scratch.batch_pages[batch_idx].1 = BatchPageState::Cached(page_num);
+        scratch.last = Some((page_num, page));
+        Ok(&scratch.last.as_ref().unwrap().1.bytes()[lo..hi])
     }
 
     pub(crate) fn record_prepared<'a>(
@@ -1125,19 +1257,94 @@ impl DirectReader {
         match mapping {
             SlotMapping::Fallback => self.record(slot, stride, scratch),
             SlotMapping::Single { batch_idx, lo, hi } => {
-                if matches!(scratch.batch_pages[batch_idx].1, BatchPageState::Demand(_)) {
-                    return self.record(slot, stride, scratch);
+                let page_num = scratch.batch_pages[batch_idx].0;
+                match &scratch.batch_pages[batch_idx].1 {
+                    BatchPageState::Demand(_) => self.record(slot, stride, scratch),
+                    BatchPageState::Ready(_, _) => {
+                        self.shared.check_error()?;
+                        Self::account_ready_hit(batch_idx, scratch);
+                        let BatchPageState::Ready(ref page, _) = scratch.batch_pages[batch_idx].1
+                        else {
+                            unreachable!();
+                        };
+                        page.consume();
+                        if hi > page.valid {
+                            return Err(Error::CorruptIndex("SSD 页不包含完整记录"));
+                        }
+                        Ok(&page.bytes()[lo..hi])
+                    }
+                    BatchPageState::Loading(_) => {
+                        self.shared.check_error()?;
+                        let ready = {
+                            let BatchPageState::Loading(ref pending) =
+                                scratch.batch_pages[batch_idx].1
+                            else {
+                                unreachable!();
+                            };
+                            pending.try_ready()
+                        };
+                        let page = match ready {
+                            Some(result) => result?,
+                            None => {
+                                let BatchPageState::Loading(pending) = std::mem::replace(
+                                    &mut scratch.batch_pages[batch_idx].1,
+                                    BatchPageState::Demand(page_num),
+                                ) else {
+                                    unreachable!();
+                                };
+                                // 必须先归还批内已固定的所有页租约再阻塞等待，避免小缓存死锁。
+                                scratch.release_pinned_pages();
+                                pending.wait()?
+                            }
+                        };
+                        scratch.pending_hits_acc += 1;
+                        if self.pin_cached() {
+                            page.consume();
+                            if hi > page.valid {
+                                return Err(Error::CorruptIndex("SSD 页不包含完整记录"));
+                            }
+                            scratch.batch_pages[batch_idx].1 = BatchPageState::Ready(page, false);
+                            scratch.last_page_idx = Some(batch_idx);
+                            let BatchPageState::Ready(ref pinned, _) =
+                                scratch.batch_pages[batch_idx].1
+                            else {
+                                unreachable!();
+                            };
+                            Ok(&pinned.bytes()[lo..hi])
+                        } else {
+                            Self::store_single_last_page(batch_idx, page_num, lo, hi, page, scratch)
+                        }
+                    }
+                    BatchPageState::Cached(_) | BatchPageState::Queued(_) => {
+                        self.shared.check_error()?;
+                        if let Some((last, data)) = &scratch.last
+                            && *last == page_num
+                        {
+                            scratch.query_page_hits_acc += 1;
+                            data.consume();
+                            if hi > data.valid {
+                                return Err(Error::CorruptIndex("SSD 页不包含完整记录"));
+                            }
+                            return Ok(&scratch.last.as_ref().unwrap().1.bytes()[lo..hi]);
+                        }
+                        scratch.last = None;
+                        let Some(entry) = self.shared.cached(page_num, false) else {
+                            return self.record(slot, stride, scratch);
+                        };
+                        let data = match entry {
+                            Entry::Ready(data) => data,
+                            Entry::Loading(pending) => {
+                                if let Some(result) = pending.try_ready() {
+                                    result?
+                                } else {
+                                    scratch.release_pinned_pages();
+                                    pending.wait()?
+                                }
+                            }
+                        };
+                        Self::store_single_last_page(batch_idx, page_num, lo, hi, data, scratch)
+                    }
                 }
-                self.shared.check_error()?;
-                Self::resolve_batch_page_ready(batch_idx, scratch)?;
-                let BatchPageState::Ready(ref page, _) = scratch.batch_pages[batch_idx].1 else {
-                    unreachable!();
-                };
-                page.consume();
-                if hi > page.valid {
-                    return Err(Error::CorruptIndex("SSD 页不包含完整记录"));
-                }
-                Ok(&page.bytes()[lo..hi])
             }
             SlotMapping::Multi {
                 first_ref,
@@ -1145,11 +1352,19 @@ impl DirectReader {
                 lo,
                 end_hi,
             } => {
-                for k in 0..page_count {
+                // 跨页记录仅当关联物理页全部无需等待时走零等待合并，否则释放固定页走逐页安全读取。
+                let all_nonblocking = (0..page_count).all(|k| {
                     let idx = scratch.multi_page_indices[first_ref + k];
-                    if matches!(scratch.batch_pages[idx].1, BatchPageState::Demand(_)) {
-                        return self.record(slot, stride, scratch);
+                    match &scratch.batch_pages[idx].1 {
+                        BatchPageState::Ready(_, _) => true,
+                        BatchPageState::Loading(pending) => pending.is_done(),
+                        BatchPageState::Cached(_)
+                        | BatchPageState::Queued(_)
+                        | BatchPageState::Demand(_) => false,
                     }
+                });
+                if !all_nonblocking {
+                    return self.record(slot, stride, scratch);
                 }
                 self.shared.check_error()?;
                 scratch.bytes.clear();
@@ -1195,10 +1410,34 @@ impl DirectReader {
                 .fetch_add(scratch.query_page_hits_acc, Ordering::Relaxed);
             scratch.query_page_hits_acc = 0;
         }
+        scratch.last = None;
         scratch.last_page_idx = None;
         scratch.batch_pages.clear();
         scratch.slot_mappings.clear();
         scratch.multi_page_indices.clear();
+    }
+
+    #[inline]
+    fn load_page_unpinned(&self, page: u64, scratch: &mut DirectScratch) -> Result<Arc<Page>> {
+        if let Some((last, data)) = &scratch.last
+            && *last == page
+        {
+            self.shared
+                .counters
+                .query_page_hits
+                .fetch_add(1, Ordering::Relaxed);
+            return Ok(Arc::clone(data));
+        }
+        // 等待前释放上一页与批内固定页句柄，确保阻塞线程不占用缓冲池租约。
+        scratch.release_pinned_pages();
+        match self
+            .shared
+            .request(page, false)?
+            .ok_or(Error::CorruptIndex("需求读取未取得页句柄"))?
+        {
+            Entry::Ready(data) => Ok(data),
+            Entry::Loading(pending) => pending.wait(),
+        }
     }
 
     pub(crate) fn record<'a>(
@@ -1215,25 +1454,7 @@ impl DirectReader {
         let p0 = (start / PAGE) as u64;
         let p1 = ((end - 1) / PAGE) as u64;
         if p0 == p1 {
-            let data = if let Some((last, data)) = &scratch.last
-                && *last == p0
-            {
-                self.shared
-                    .counters
-                    .query_page_hits
-                    .fetch_add(1, Ordering::Relaxed);
-                Arc::clone(data)
-            } else {
-                scratch.last = None;
-                match self
-                    .shared
-                    .request(p0, false)?
-                    .ok_or(Error::CorruptIndex("需求读取未取得页句柄"))?
-                {
-                    Entry::Ready(data) => data,
-                    Entry::Loading(pending) => pending.wait()?,
-                }
-            };
+            let data = self.load_page_unpinned(p0, scratch)?;
             data.consume();
             let page_start = p0 as usize * PAGE;
             let lo = start - page_start;
@@ -1247,26 +1468,7 @@ impl DirectReader {
         scratch.bytes.clear();
         scratch.bytes.reserve(stride);
         for page in p0..=p1 {
-            let data = if let Some((last, data)) = &scratch.last
-                && *last == page
-            {
-                self.shared
-                    .counters
-                    .query_page_hits
-                    .fetch_add(1, Ordering::Relaxed);
-                Arc::clone(data)
-            } else {
-                // 先归还上一页，单个查询等待下一页时不会额外占用池中的旧页。
-                scratch.last = None;
-                match self
-                    .shared
-                    .request(page, false)?
-                    .ok_or(Error::CorruptIndex("需求读取未取得页句柄"))?
-                {
-                    Entry::Ready(data) => data,
-                    Entry::Loading(pending) => pending.wait()?,
-                }
-            };
+            let data = self.load_page_unpinned(page, scratch)?;
             data.consume();
             let page_start = page as usize * PAGE;
             let lo = start.saturating_sub(page_start);
@@ -1576,5 +1778,129 @@ mod tests {
         reader.clear();
         assert_eq!(reader.stats().read_errors, 2);
         assert_eq!(reader.stats().pool_live_bytes, 0);
+    }
+
+    #[test]
+    fn 小缓存十七页预算下多批次并发预取与回退读取不阻塞() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        let stride = 1024;
+        let pages = 64;
+        let total_bytes = pages * PAGE;
+        let bytes = (0..total_bytes)
+            .map(|i| ((i * 131 + i / PAGE) % 251) as u8)
+            .collect::<Vec<_>>();
+        file.write_all(&bytes).unwrap();
+        file.as_file().sync_all().unwrap();
+
+        let reader = DirectReader::from_file(
+            file.as_file().try_clone().unwrap(),
+            0,
+            bytes.len(),
+            SsdCacheConfig {
+                cache_bytes: 16 * PAGE,
+                inflight_bytes: PAGE,
+                io_workers: 4,
+                prefetch_window: 16,
+                driver: SsdIoDriver::Pread,
+            },
+        )
+        .unwrap();
+
+        let workers = 20usize;
+        let prepared_barrier = std::sync::Barrier::new(workers + 1);
+        let release_barrier = std::sync::Barrier::new(workers + 1);
+        std::thread::scope(|scope| {
+            for worker in 0..workers {
+                let reader = &reader;
+                let bytes = &bytes;
+                let prepared_barrier = &prepared_barrier;
+                let release_barrier = &release_barrier;
+                scope.spawn(move || {
+                    let mut scratch = DirectScratch::default();
+                    let slots = [
+                        worker * 4,
+                        ((worker + 21) % pages) * 4,
+                        ((worker + 43) % pages) * 4 + 1,
+                    ];
+                    reader.prepare_rerank_batch(&slots, stride, &mut scratch);
+                    prepared_barrier.wait();
+                    release_barrier.wait();
+
+                    let mut misses = Vec::new();
+                    for (pos, &slot) in slots.iter().enumerate() {
+                        if reader.is_slot_ready(pos, &scratch) {
+                            assert_eq!(
+                                reader
+                                    .record_prepared(pos, slot, stride, &mut scratch)
+                                    .unwrap(),
+                                &bytes[slot * stride..(slot + 1) * stride]
+                            );
+                        } else {
+                            misses.push(pos);
+                        }
+                    }
+                    let mut pending = Vec::new();
+                    for pos in misses {
+                        let slot = slots[pos];
+                        if reader.try_upgrade_slot_ready(pos, &mut scratch).unwrap() {
+                            assert_eq!(
+                                reader
+                                    .record_prepared(pos, slot, stride, &mut scratch)
+                                    .unwrap(),
+                                &bytes[slot * stride..(slot + 1) * stride]
+                            );
+                        } else {
+                            pending.push(pos);
+                        }
+                    }
+                    for pos in pending {
+                        let slot = slots[pos];
+                        assert_eq!(
+                            reader
+                                .record_prepared(pos, slot, stride, &mut scratch)
+                                .unwrap(),
+                            &bytes[slot * stride..(slot + 1) * stride]
+                        );
+                    }
+                    reader.finish_rerank_batch(&mut scratch);
+
+                    // 继续并发冲刷混合命中共用页与回退跨页读取。
+                    for round in 0..8usize {
+                        let base = (worker * 3 + round * 7) % pages;
+                        let mixed_slots = [
+                            base * 4,
+                            ((base + 19) % pages) * 4 + 2,
+                            ((base + 37) % pages) * 4 + 3,
+                        ];
+                        reader.prepare_rerank_batch(&mixed_slots, stride, &mut scratch);
+                        for (pos, &slot) in mixed_slots.iter().enumerate() {
+                            assert_eq!(
+                                reader
+                                    .record_prepared(pos, slot, stride, &mut scratch)
+                                    .unwrap(),
+                                &bytes[slot * stride..(slot + 1) * stride]
+                            );
+                        }
+                        reader.finish_rerank_batch(&mut scratch);
+                    }
+                });
+            }
+
+            // 全部 20 个并发批次持有 prepare 结果且超过 17 页预算时，独立回退读仍能取得租约。
+            prepared_barrier.wait();
+            let mut extra = DirectScratch::default();
+            let probe_slot = 55 * 4 + 2;
+            assert_eq!(
+                reader.record(probe_slot, stride, &mut extra).unwrap(),
+                &bytes[probe_slot * stride..(probe_slot + 1) * stride]
+            );
+            drop(extra);
+            release_barrier.wait();
+        });
+
+        reader.clear();
+        assert_eq!(reader.stats().cache_current_bytes, 0);
+        assert_eq!(reader.stats().pool_live_bytes, 0);
+        assert!(reader.stats().pool_peak_live_bytes <= 17 * PAGE);
     }
 }

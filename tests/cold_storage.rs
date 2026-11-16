@@ -694,3 +694,91 @@ fn 选择性门控参数校验并在多页直读上削减尾页读取且保持�
     assert_eq!(ssd.ssd_selective_gating(), None);
     assert_eq!(ssd.search(query, &sc).unwrap(), exact_res);
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn 小缓存十七页预算多并发搜索与重排不发生租约阻塞() {
+    use quiver_ann::SsdCacheConfig;
+    let dim = 512;
+    let n = 256;
+    let vectors = data(n, dim);
+    let mut index = build(&vectors, dim);
+    index.prepare_colocated_hot_store(true).unwrap();
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("tiny-cache-concurrent.pelorus");
+    index.save_snapshot(&path).unwrap();
+
+    let cfg = SsdCacheConfig {
+        cache_bytes: 16 * 4096,
+        inflight_bytes: 4096,
+        io_workers: 1,
+        prefetch_window: 32,
+        ..SsdCacheConfig::default()
+    };
+    let mut ssd = Index::open_ssd(&path, cfg).unwrap();
+
+    let sc = SearchConfig {
+        top_k: 10,
+        ef_search: 48,
+        rerank_limit: Some(48),
+    };
+    let workers = 24usize;
+    let candidates: Vec<u64> = (0..64u64).collect();
+    let baselines: Vec<Vec<(u64, f32)>> = (0..4)
+        .map(|i| ssd.search(&vectors[i * dim..(i + 1) * dim], &sc).unwrap())
+        .collect();
+
+    // Stage 1：无损高并发查询与纯重排混合压测（24 并发 > 17 页缓冲池上限）
+    let start = std::sync::Barrier::new(workers);
+    std::thread::scope(|scope| {
+        for worker in 0..workers {
+            let ssd = &ssd;
+            let vectors = &vectors;
+            let baselines = &baselines;
+            let candidates = &candidates;
+            let start = &start;
+            scope.spawn(move || {
+                start.wait();
+                for round in 0..4 {
+                    let q_idx = (worker + round) % baselines.len();
+                    let query = &vectors[q_idx * dim..(q_idx + 1) * dim];
+                    if worker % 2 == 0 {
+                        assert_eq!(ssd.search(query, &sc).unwrap(), baselines[q_idx]);
+                    } else {
+                        let reranked = ssd
+                            .rerank_candidates(query, candidates, candidates.len())
+                            .unwrap();
+                        assert_eq!(reranked.len(), candidates.len());
+                    }
+                }
+            });
+        }
+    });
+
+    // Stage 2：开启选择性门控后同样在 17 页预算下跑 24 并发查询不发生死锁
+    ssd.set_ssd_selective_gating(Some(2.5)).unwrap();
+    let start_gated = std::sync::Barrier::new(workers);
+    std::thread::scope(|scope| {
+        for worker in 0..workers {
+            let ssd = &ssd;
+            let vectors = &vectors;
+            let start_gated = &start_gated;
+            scope.spawn(move || {
+                start_gated.wait();
+                for round in 0..4 {
+                    let q_idx = (worker + round) % 4;
+                    let query = &vectors[q_idx * dim..(q_idx + 1) * dim];
+                    let res = ssd.search(query, &sc).unwrap();
+                    assert_eq!(res.len(), sc.top_k);
+                }
+            });
+        }
+    });
+
+    ssd.drain_ssd_reads();
+    ssd.clear_ssd_cache();
+    let stats = ssd.ssd_io_stats().unwrap();
+    assert_eq!(stats.cache_current_bytes, 0);
+    assert_eq!(stats.pool_live_bytes, 0);
+}
