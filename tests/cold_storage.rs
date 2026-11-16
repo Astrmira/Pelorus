@@ -514,6 +514,18 @@ fn 历史单文件可映射迁移并在追加后发布完整快照() {
 }
 
 #[cfg(target_os = "linux")]
+fn linux_ssd_test_config() -> quiver_ann::SsdCacheConfig {
+    // CI 等非特权 Linux 环境默认 RLIMIT_MEMLOCK 通常为 8 MiB，测试使用页级小预算覆盖真实 io_uring 路径
+    quiver_ann::SsdCacheConfig {
+        cache_bytes: 16 * 4096,
+        inflight_bytes: 4 * 4096,
+        io_workers: 2,
+        prefetch_window: 16,
+        ..quiver_ann::SsdCacheConfig::default()
+    }
+}
+
+#[cfg(target_os = "linux")]
 #[test]
 fn 原始精度直接读取的增量保存直接复用原始段() {
     let vectors = data(80, 17);
@@ -522,7 +534,8 @@ fn 原始精度直接读取的增量保存直接复用原始段() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("fp32.pelorus");
     original.save_snapshot(&path).unwrap();
-    let mut ssd = Index::open_ssd(&path, quiver_ann::SsdCacheConfig::default()).unwrap();
+    let config = linux_ssd_test_config();
+    let mut ssd = Index::open_ssd(&path, config).unwrap();
     let query = &vectors[..17];
     assert_eq!(
         ssd.search(query, &search_config()).unwrap(),
@@ -538,7 +551,7 @@ fn 原始精度直接读取的增量保存直接复用原始段() {
         mapped.search(query, &search_config()).unwrap(),
         original.search(query, &search_config()).unwrap()
     );
-    let restored = Index::open_ssd(&path, quiver_ann::SsdCacheConfig::default()).unwrap();
+    let restored = Index::open_ssd(&path, config).unwrap();
     assert_eq!(
         restored.search(query, &search_config()).unwrap(),
         original.search(query, &search_config()).unwrap()
@@ -561,13 +574,7 @@ fn 直接读取缓存的普通查询命中扩容与增量保存均保留结果()
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("cached.pelorus");
     source.save_snapshot(&path).unwrap();
-    let config = SsdCacheConfig {
-        cache_bytes: 16 * 4096,
-        inflight_bytes: 4 * 4096,
-        io_workers: 2,
-        prefetch_window: 16,
-        driver: quiver_ann::SsdIoDriver::IoUring,
-    };
+    let config = linux_ssd_test_config();
     let mut ssd = Index::open_ssd(&path, config).unwrap();
     let expected = source.search(&vectors[..17], &search_config()).unwrap();
     for _ in 0..2 {
@@ -581,14 +588,15 @@ fn 直接读取缓存的普通查询命中扩容与增量保存均保留结果()
     assert!(ssd.ssd_io_stats().unwrap().cache_peak_bytes <= config.cache_bytes);
     ssd.clear_ssd_cache();
     assert_eq!(ssd.ssd_io_stats().unwrap().cache_current_bytes, 0);
+    let expanded_bytes = 64 * 4096;
     ssd.set_ssd_cache_config(SsdCacheConfig {
-        cache_bytes: 512 * 1024 * 1024,
+        cache_bytes: expanded_bytes,
         ..config
     })
     .unwrap();
     assert_eq!(
         ssd.ssd_io_stats().unwrap().cache_capacity_bytes,
-        512 * 1024 * 1024
+        expanded_bytes
     );
     assert_eq!(
         ssd.search(&vectors[..17], &search_config()).unwrap(),

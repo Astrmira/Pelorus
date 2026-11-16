@@ -70,9 +70,14 @@ unsafe extern "C" {
 fn checked(result: i32, operation: &str) -> Result<i32> {
     if result < 0 {
         let error = std::io::Error::from_raw_os_error(-result);
+        let hint = if error.kind() == std::io::ErrorKind::OutOfMemory {
+            "（固定缓冲注册受 RLIMIT_MEMLOCK 限制，可提高 ulimit -l、调小缓存或改用 Pread 驱动）"
+        } else {
+            ""
+        };
         return Err(std::io::Error::new(
             error.kind(),
-            format!("io_uring{operation}失败，系统错误{error}"),
+            format!("io_uring{operation}失败{hint}，系统错误{error}"),
         )
         .into());
     }
