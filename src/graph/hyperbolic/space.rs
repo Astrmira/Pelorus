@@ -106,10 +106,12 @@ impl NativeSpace<'_> {
         }
     }
 
-    pub(crate) fn rerank_proxy(
+    #[inline]
+    fn rerank_proxy_impl(
         &self,
         query: &[f32],
         factor: f64,
+        prepared_pos: Option<usize>,
         slot: usize,
         trace_slow: bool,
         buffer: &mut crate::storage::RerankScratch,
@@ -122,17 +124,41 @@ impl NativeSpace<'_> {
                     t.exact_evals += 1;
                 });
             }
-            store.score(
-                query,
-                factor,
-                slot,
-                crate::Metric::Poincare {
-                    curvature: self.curvature,
-                },
-                buffer,
-            )
+            let metric = crate::Metric::Poincare {
+                curvature: self.curvature,
+            };
+            if let Some(pos) = prepared_pos {
+                store.score_prepared(query, factor, pos, slot, metric, buffer)
+            } else {
+                store.score(query, factor, slot, metric, buffer)
+            }
         } else {
             Ok(self.proxy_fast(query, factor, slot, trace_slow))
         }
+    }
+
+    pub(crate) fn rerank_proxy(
+        &self,
+        query: &[f32],
+        factor: f64,
+        slot: usize,
+        trace_slow: bool,
+        buffer: &mut crate::storage::RerankScratch,
+    ) -> crate::Result<f64> {
+        self.rerank_proxy_impl(query, factor, None, slot, trace_slow, buffer)
+    }
+
+    /// 对已通过 `prepare_rerank_batch` 预解析的候选项执行零拷贝直读重排打分。
+    #[inline]
+    pub(crate) fn rerank_proxy_prepared(
+        &self,
+        query: &[f32],
+        factor: f64,
+        pos: usize,
+        slot: usize,
+        trace_slow: bool,
+        buffer: &mut crate::storage::RerankScratch,
+    ) -> crate::Result<f64> {
+        self.rerank_proxy_impl(query, factor, Some(pos), slot, trace_slow, buffer)
     }
 }

@@ -491,77 +491,84 @@ impl QuIVer {
         let mut top_heap: BinaryHeap<(Distance, u64, u32)> =
             BinaryHeap::with_capacity(config.top_k + 1);
         let rerank_slice = &candidates[..eff_limit];
-        let mut decode_buffer = crate::storage::RerankScratch::default();
         let direct = space.rerank.and_then(|store| store.direct.as_ref());
-        let prefetch_window = direct.map_or(2, |reader| reader.config.prefetch_window);
-        if prefetch_window > 0 {
-            for &(_, node) in rerank_slice.iter().take(prefetch_window) {
-                space.prefetch_rerank(self.slot_indices[node as usize]);
+        struct RerankScratchLease<'a> {
+            buf: Option<crate::storage::RerankScratch>,
+            direct: Option<&'a crate::storage::DirectReader>,
+        }
+        impl Drop for RerankScratchLease<'_> {
+            fn drop(&mut self) {
+                if let Some(mut buf) = self.buf.take() {
+                    if let Some(reader) = self.direct {
+                        reader.finish_rerank_batch(&mut buf.io);
+                    }
+                    buf.reset_query();
+                    SCRATCH.with(|cell| cell.borrow_mut().rerank = buf);
+                }
             }
         }
+        let mut lease = RerankScratchLease {
+            buf: Some(SCRATCH.with(|cell| std::mem::take(&mut cell.borrow_mut().rerank))),
+            direct,
+        };
+        let decode_buffer = lease.buf.as_mut().unwrap();
+        let prefetch_window = direct.map_or(2, |reader| reader.config.prefetch_window);
         let use_radial_bound = space.rerank.is_none_or(|store| {
             store.config == crate::RerankConfig::default()
                 || store.config.representation == crate::RerankRepresentation::Polar
         });
-        for (idx_pos, &(_, node)) in rerank_slice.iter().enumerate() {
-            if prefetch_window > 0 && idx_pos + prefetch_window < rerank_slice.len() {
-                let ahead = rerank_slice[idx_pos + prefetch_window].1 as usize;
-                space.prefetch_rerank(self.slot_indices[ahead]);
-            }
-            if use_radial_bound && top_heap.len() >= config.top_k {
-                let bound = top_heap.peek().unwrap().0;
-                let meta_opt = router.and_then(|r| r.node_meta(node as usize));
-                if let Some(meta) = meta_opt {
-                    if Distance(meta.radial_lower_bound_fast(query_radius, factor, radial_bound_on))
-                        > bound
-                    {
-                        #[cfg(feature = "research")]
-                        if stage_prof {
-                            radial_rejections += 1;
-                        }
-                        #[cfg(feature = "research")]
-                        if trace_slow {
-                            trace_query(|t| t.bound_rejections += 1);
-                        }
-                        continue;
-                    }
-                } else if let Some(&code) = self.geometry_codes.get(node as usize) {
-                    let radial_lb = if radial_bound_on {
-                        radial_bound_core(query_radius, code.radius, factor, code.boundary_factor)
-                    } else {
-                        1.0
-                    };
-                    if Distance(radial_lb) > bound {
-                        #[cfg(feature = "research")]
-                        if stage_prof {
-                            radial_rejections += 1;
-                        }
-                        continue;
-                    }
-                }
-            }
+        let ctx = RerankCtx {
+            space,
+            query,
+            factor,
+            query_radius,
+            radial_bound_on,
+            use_radial_bound,
+            top_k: config.top_k,
+            router,
+            geometry_codes: &self.geometry_codes,
+            slot_indices: &self.slot_indices,
+            ids: &self.ids,
+            rerank_slice,
+            trace_slow,
             #[cfg(feature = "research")]
-            let score_start = stage_prof.then(std::time::Instant::now);
-            let distance = space.rerank_proxy(
-                query,
-                factor,
-                self.slot_indices[node as usize],
-                trace_slow,
-                &mut decode_buffer,
-            )?;
+            stage_prof,
+        };
+        let mut state = RerankState {
+            top_heap: &mut top_heap,
+            decode_buffer,
             #[cfg(feature = "research")]
-            if let Some(start) = score_start {
-                score_ns += start.elapsed().as_nanos() as u64;
-                scored += 1;
+            score_ns: &mut score_ns,
+            #[cfg(feature = "research")]
+            scored: &mut scored,
+            #[cfg(feature = "research")]
+            radial_rejections: &mut radial_rejections,
+        };
+        if let Some(store) = space.rerank
+            && let Some(reader) = direct
+            && prefetch_window > 0
+            && !rerank_slice.is_empty()
+        {
+            state.decode_buffer.slots.clear();
+            for &(_, node) in rerank_slice {
+                state
+                    .decode_buffer
+                    .slots
+                    .push(self.slot_indices[node as usize]);
             }
-            let exact = (Distance(distance), self.ids[node as usize], node);
-            if top_heap.len() < config.top_k {
-                top_heap.push(exact);
-            } else if exact < *top_heap.peek().unwrap() {
-                top_heap.pop();
-                top_heap.push(exact);
+            if let Some(gate_z) = reader.selective_gating()
+                && rerank_slice.len() > config.top_k
+                && router.is_some()
+                && use_radial_bound
+            {
+                ctx.rerank_direct_gated(&mut state, store, reader, gate_z, self.dim)?;
+            } else {
+                ctx.rerank_direct_stage1(&mut state, store, reader)?;
             }
+        } else {
+            ctx.rerank_sequential(&mut state, prefetch_window)?;
         }
+        drop(lease);
         if fast_kernels && candidates.capacity() > 0 {
             candidates.clear();
             SCRATCH.with(|cell| {
@@ -593,5 +600,390 @@ impl QuIVer {
             });
         }
         Ok(out)
+    }
+}
+
+/// 精排阶段不可变查询上下文（避免跨多种重排路径传递十余个参数）。
+struct RerankCtx<'a> {
+    space: &'a NativeSpace<'a>,
+    query: &'a [f32],
+    factor: f64,
+    query_radius: f64,
+    radial_bound_on: bool,
+    use_radial_bound: bool,
+    top_k: usize,
+    router: Option<&'a PolarRouter>,
+    geometry_codes: &'a [GeometryCode],
+    slot_indices: &'a [usize],
+    ids: &'a [u64],
+    rerank_slice: &'a [Candidate],
+    trace_slow: bool,
+    #[cfg(feature = "research")]
+    stage_prof: bool,
+}
+
+/// 精排阶段可变结果堆、缓冲与研究计数状态。
+struct RerankState<'a> {
+    top_heap: &'a mut BinaryHeap<(Distance, u64, u32)>,
+    decode_buffer: &'a mut crate::storage::RerankScratch,
+    #[cfg(feature = "research")]
+    score_ns: &'a mut u64,
+    #[cfg(feature = "research")]
+    scored: &'a mut usize,
+    #[cfg(feature = "research")]
+    radial_rejections: &'a mut usize,
+}
+
+impl RerankCtx<'_> {
+    #[inline]
+    fn pruned(&self, state: &mut RerankState<'_>, node: u32) -> bool {
+        if !self.use_radial_bound || state.top_heap.len() < self.top_k {
+            return false;
+        }
+        let bound = state.top_heap.peek().unwrap().0;
+        if let Some(meta) = self.router.and_then(|r| r.node_meta(node as usize)) {
+            if Distance(meta.radial_lower_bound_fast(
+                self.query_radius,
+                self.factor,
+                self.radial_bound_on,
+            )) > bound
+            {
+                #[cfg(feature = "research")]
+                if self.stage_prof {
+                    *state.radial_rejections += 1;
+                }
+                #[cfg(feature = "research")]
+                if self.trace_slow {
+                    trace_query(|t| t.bound_rejections += 1);
+                }
+                return true;
+            }
+        } else if let Some(&code) = self.geometry_codes.get(node as usize) {
+            let radial_lb = if self.radial_bound_on {
+                radial_bound_core(
+                    self.query_radius,
+                    code.radius,
+                    self.factor,
+                    code.boundary_factor,
+                )
+            } else {
+                1.0
+            };
+            if Distance(radial_lb) > bound {
+                #[cfg(feature = "research")]
+                if self.stage_prof {
+                    *state.radial_rejections += 1;
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    #[inline]
+    fn score_and_push(
+        &self,
+        state: &mut RerankState<'_>,
+        prepared_pos: Option<usize>,
+        node: u32,
+    ) -> crate::Result<f64> {
+        let slot = self.slot_indices[node as usize];
+        #[cfg(feature = "research")]
+        let score_start = self.stage_prof.then(std::time::Instant::now);
+        let distance = if let Some(pos) = prepared_pos {
+            self.space.rerank_proxy_prepared(
+                self.query,
+                self.factor,
+                pos,
+                slot,
+                self.trace_slow,
+                state.decode_buffer,
+            )?
+        } else {
+            self.space.rerank_proxy(
+                self.query,
+                self.factor,
+                slot,
+                self.trace_slow,
+                state.decode_buffer,
+            )?
+        };
+        #[cfg(feature = "research")]
+        if let Some(start) = score_start {
+            *state.score_ns += start.elapsed().as_nanos() as u64;
+            *state.scored += 1;
+        }
+        let exact = (Distance(distance), self.ids[node as usize], node);
+        if state.top_heap.len() < self.top_k {
+            state.top_heap.push(exact);
+        } else if exact < *state.top_heap.peek().unwrap() {
+            state.top_heap.pop();
+            state.top_heap.push(exact);
+        }
+        Ok(distance)
+    }
+
+    /// 常规滑窗预取重排路径（内存冷存、非直接读或禁用预取窗口时使用）。
+    fn rerank_sequential(
+        &self,
+        state: &mut RerankState<'_>,
+        prefetch_window: usize,
+    ) -> crate::Result<()> {
+        if prefetch_window > 0 {
+            for &(_, node) in self.rerank_slice.iter().take(prefetch_window) {
+                self.space.prefetch_rerank(self.slot_indices[node as usize]);
+            }
+        }
+        for (idx_pos, &(_, node)) in self.rerank_slice.iter().enumerate() {
+            if prefetch_window > 0 && idx_pos + prefetch_window < self.rerank_slice.len() {
+                let ahead = self.rerank_slice[idx_pos + prefetch_window].1 as usize;
+                self.space.prefetch_rerank(self.slot_indices[ahead]);
+            }
+            if !self.pruned(state, node) {
+                self.score_and_push(state, None, node)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Stage 1：100% 位精确无损单波批重排（缓存命中 CPU 与 NVMe DMA 并行重叠）。
+    fn rerank_direct_stage1(
+        &self,
+        state: &mut RerankState<'_>,
+        store: &crate::storage::ColdStore,
+        reader: &crate::storage::DirectReader,
+    ) -> crate::Result<()> {
+        let slots = std::mem::take(&mut state.decode_buffer.slots);
+        reader.prepare_rerank_batch(&slots, store.stride, &mut state.decode_buffer.io);
+        state.decode_buffer.slots = slots;
+
+        state.decode_buffer.ready_pos.clear();
+        state.decode_buffer.misses.clear();
+        for pos in 0..self.rerank_slice.len() {
+            if reader.is_slot_ready(pos, &state.decode_buffer.io) {
+                state.decode_buffer.ready_pos.push(pos);
+            } else {
+                state.decode_buffer.misses.push(pos);
+            }
+        }
+        self.drain_ready_and_misses(state, reader)
+    }
+
+    /// 共享 Stage 1 三段调度：先算已命中页（并发掩盖 DMA）-> 非阻塞收割已就绪缺失 -> 阻塞补齐尾页。
+    fn drain_ready_and_misses(
+        &self,
+        state: &mut RerankState<'_>,
+        reader: &crate::storage::DirectReader,
+    ) -> crate::Result<()> {
+        let ready = std::mem::take(&mut state.decode_buffer.ready_pos);
+        for &pos in &ready {
+            let node = self.rerank_slice[pos].1;
+            if !self.pruned(state, node) {
+                self.score_and_push(state, Some(pos), node)?;
+            }
+        }
+        state.decode_buffer.ready_pos = ready;
+
+        let misses = std::mem::take(&mut state.decode_buffer.misses);
+        state.decode_buffer.pending.clear();
+        for &pos in &misses {
+            let node = self.rerank_slice[pos].1;
+            if self.pruned(state, node) {
+                continue;
+            }
+            if reader.try_upgrade_slot_ready(pos, &mut state.decode_buffer.io)? {
+                self.score_and_push(state, Some(pos), node)?;
+            } else {
+                state.decode_buffer.pending.push(pos);
+            }
+        }
+        state.decode_buffer.misses = misses;
+
+        let pending = std::mem::take(&mut state.decode_buffer.pending);
+        for &pos in &pending {
+            let node = self.rerank_slice[pos].1;
+            if !self.pruned(state, node) {
+                self.score_and_push(state, Some(pos), node)?;
+            }
+        }
+        state.decode_buffer.pending = pending;
+        Ok(())
+    }
+
+    /// Stage 2（可选激活）：首波锚点与缓存命中重叠 -> 同页免费共享（Share-the-Read）+ 自校准共形门控裁剪尾部 NVMe 读。
+    fn rerank_direct_gated(
+        &self,
+        state: &mut RerankState<'_>,
+        store: &crate::storage::ColdStore,
+        reader: &crate::storage::DirectReader,
+        gate_z: f64,
+        dim: usize,
+    ) -> crate::Result<()> {
+        // 小预算（缺失 <= 36）拆两波会多付一次 NVMe RTT 且收益极小，直接走无损单波快路径。
+        const W1_ANCHOR: usize = 24;
+        const GATE_MIN_MISSES: usize = 36;
+
+        let slots = std::mem::take(&mut state.decode_buffer.slots);
+        reader.probe_rerank_batch_hits(&slots, store.stride, &mut state.decode_buffer.io);
+        state.decode_buffer.slots = slots;
+
+        state.decode_buffer.ready_pos.clear();
+        state.decode_buffer.misses.clear();
+        for pos in 0..self.rerank_slice.len() {
+            if reader.is_slot_ready(pos, &state.decode_buffer.io) {
+                state.decode_buffer.ready_pos.push(pos);
+            } else {
+                state.decode_buffer.misses.push(pos);
+            }
+        }
+        if state.decode_buffer.misses.len() <= GATE_MIN_MISSES {
+            let misses = std::mem::take(&mut state.decode_buffer.misses);
+            reader.enqueue_rerank_positions(&misses, &mut state.decode_buffer.io);
+            state.decode_buffer.misses = misses;
+            return self.drain_ready_and_misses(state, reader);
+        }
+
+        let misses = std::mem::take(&mut state.decode_buffer.misses);
+        let mut ready_buf = std::mem::take(&mut state.decode_buffer.ready_pos);
+        let (w1, deferred) = misses.split_at(W1_ANCHOR);
+        // 立即提交首波缺失页，同时在 DMA 等待期于 CPU 上重叠算完所有缓存命中。
+        reader.enqueue_rerank_positions(w1, &mut state.decode_buffer.io);
+
+        let sigma_asym = (0.221 / (dim.max(1) as f64)).sqrt();
+        let dict = self.router.and_then(|r| r.residual_dict.as_ref());
+        let has_dict = dict.is_some();
+        let mut cal_sum_t = 0.0f64;
+        let mut cal_sum_t2 = 0.0f64;
+        let mut cal_n = 0usize;
+
+        for &pos in &ready_buf {
+            self.score_and_calibrate(
+                state,
+                pos,
+                sigma_asym,
+                dict,
+                has_dict,
+                &mut cal_sum_t,
+                &mut cal_sum_t2,
+                &mut cal_n,
+            )?;
+        }
+        for &pos in w1 {
+            self.score_and_calibrate(
+                state,
+                pos,
+                sigma_asym,
+                dict,
+                has_dict,
+                &mut cal_sum_t,
+                &mut cal_sum_t2,
+                &mut cal_n,
+            )?;
+        }
+
+        // 复用 ready_buf 承接共享同页免费就绪候选项（Share-the-Read），survivors 承接需二波读取的候选。
+        ready_buf.clear();
+        let mut survivors = std::mem::take(&mut state.decode_buffer.survivors);
+        survivors.clear();
+        if state.top_heap.len() >= self.top_k && cal_n >= 4 {
+            let tau_k = state.top_heap.peek().unwrap().0.0;
+            let mu = cal_sum_t / cal_n as f64;
+            let var = ((cal_sum_t2 - cal_n as f64 * mu * mu) / ((cal_n - 1) as f64)).max(0.0);
+            let s_emp = var.sqrt().max(0.25);
+            let z_shift = mu.min(0.0) - gate_z * s_emp;
+            for &pos in deferred {
+                let (p_ap_d, node) = self.rerank_slice[pos];
+                if self.pruned(state, node) {
+                    continue;
+                }
+                if reader.try_upgrade_slot_ready(pos, &mut state.decode_buffer.io)? {
+                    ready_buf.push(pos);
+                } else {
+                    let sig = self.compute_conformal_sigma_p(node, sigma_asym, dict, has_dict);
+                    if p_ap_d.0 + z_shift * sig <= tau_k {
+                        survivors.push(pos);
+                    }
+                }
+            }
+        } else {
+            survivors.extend_from_slice(deferred);
+        }
+
+        if !survivors.is_empty() {
+            reader.enqueue_rerank_positions(&survivors, &mut state.decode_buffer.io);
+        }
+        for &pos in &ready_buf {
+            let node = self.rerank_slice[pos].1;
+            if !self.pruned(state, node) {
+                self.score_and_push(state, Some(pos), node)?;
+            }
+        }
+        for &pos in &survivors {
+            let node = self.rerank_slice[pos].1;
+            if !self.pruned(state, node) {
+                self.score_and_push(state, Some(pos), node)?;
+            }
+        }
+
+        state.decode_buffer.misses = misses;
+        state.decode_buffer.ready_pos = ready_buf;
+        state.decode_buffer.survivors = survivors;
+        Ok(())
+    }
+
+    #[inline]
+    fn compute_conformal_sigma_p(
+        &self,
+        node: u32,
+        sigma_asym: f64,
+        dict: Option<&ResidualConeDict>,
+        has_dict: bool,
+    ) -> f64 {
+        let Some(m) = self.router.and_then(|r| r.node_meta(node as usize)) else {
+            return 0.0;
+        };
+        let atten = if has_dict && m.has_residual_cone() {
+            SCRATCH.with(|c| {
+                c.borrow()
+                    .cone_cache
+                    .query_residual_atten(dict, self.query, self.query_radius, *m)
+            })
+        } else {
+            1.0
+        };
+        2.0 * self.query_radius
+            * f64::from(m.radius)
+            * self.factor
+            * f64::from(m.boundary_factor)
+            * sigma_asym
+            * atten
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[inline]
+    fn score_and_calibrate(
+        &self,
+        state: &mut RerankState<'_>,
+        pos: usize,
+        sigma_asym: f64,
+        dict: Option<&ResidualConeDict>,
+        has_dict: bool,
+        cal_sum_t: &mut f64,
+        cal_sum_t2: &mut f64,
+        cal_n: &mut usize,
+    ) -> crate::Result<()> {
+        let (p_ap_d, node) = self.rerank_slice[pos];
+        if self.pruned(state, node) {
+            return Ok(());
+        }
+        let p_ex = self.score_and_push(state, Some(pos), node)?;
+        let sig = self.compute_conformal_sigma_p(node, sigma_asym, dict, has_dict);
+        if sig > 1e-12 {
+            let t = (p_ex - p_ap_d.0) / sig;
+            *cal_sum_t += t;
+            *cal_sum_t2 += t * t;
+            *cal_n += 1;
+        }
+        Ok(())
     }
 }

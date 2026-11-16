@@ -371,6 +371,7 @@ pub(crate) struct Scratch {
     pub(crate) cone_cache: QueryConeCache,
     pub(crate) gate_pool: Vec<Candidate>,
     pub(crate) last_query_radius: f64,
+    pub(crate) rerank: crate::storage::RerankScratch,
 }
 impl Scratch {
     pub(crate) fn new() -> Self {
@@ -393,6 +394,7 @@ impl Scratch {
             cone_cache: QueryConeCache::new(),
             gate_pool: Vec::new(),
             last_query_radius: -1.0,
+            rerank: crate::storage::RerankScratch::default(),
         }
     }
 }

@@ -13,6 +13,28 @@ const SHARDS: usize = 16;
 #[cfg(target_os = "linux")]
 mod uring;
 
+#[derive(Default)]
+struct PageHasher(u64);
+
+impl std::hash::Hasher for PageHasher {
+    #[inline(always)]
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    #[inline(always)]
+    fn write(&mut self, _bytes: &[u8]) {
+        unreachable!("PageHasher仅散列u64页号");
+    }
+
+    #[inline(always)]
+    fn write_u64(&mut self, key: u64) {
+        self.0 = (key ^ (key >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    }
+}
+
+type PageMap<V> = HashMap<u64, V, std::hash::BuildHasherDefault<PageHasher>>;
+
 struct Lease {
     index: usize,
 }
@@ -139,8 +161,12 @@ impl Page {
         // SAFETY：读取完成事件已确认，页持有独占编号的租约及池的 Arc，当前共享生命周期内不会复用或修改此页。
         unsafe { std::slice::from_raw_parts(self.pool.address.as_ptr().add(index * PAGE), PAGE) }
     }
+    #[inline(always)]
     fn consume(&self) {
-        if self.prefetched && !self.consumed.swap(true, Ordering::Relaxed) {
+        if self.prefetched
+            && !self.consumed.load(Ordering::Relaxed)
+            && !self.consumed.swap(true, Ordering::Relaxed)
+        {
             self.counters.prefetch_used.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -157,10 +183,25 @@ impl Drop for Page {
 }
 
 struct Pending {
+    done: AtomicBool,
     result: Mutex<Option<Result<Arc<Page>>>>,
     ready: Condvar,
 }
 impl Pending {
+    fn new() -> Self {
+        Self {
+            done: AtomicBool::new(false),
+            result: Mutex::new(None),
+            ready: Condvar::new(),
+        }
+    }
+    #[inline]
+    fn try_ready(&self) -> Option<Result<Arc<Page>>> {
+        if !self.done.load(Ordering::Acquire) {
+            return None;
+        }
+        self.result.lock().unwrap().as_ref().cloned()
+    }
     fn wait(&self) -> Result<Arc<Page>> {
         let mut state = self.result.lock().unwrap();
         while state.is_none() {
@@ -170,6 +211,7 @@ impl Pending {
     }
     fn finish(&self, result: Result<Arc<Page>>) {
         *self.result.lock().unwrap() = Some(result);
+        self.done.store(true, Ordering::Release);
         self.ready.notify_all();
     }
 }
@@ -179,7 +221,7 @@ enum Entry {
     Loading(Arc<Pending>),
 }
 struct Cache {
-    entries: HashMap<u64, Entry>,
+    entries: PageMap<Entry>,
     fifo: VecDeque<u64>,
     resident: usize,
     capacity: usize,
@@ -199,6 +241,7 @@ struct Shared {
     file: File,
     file_len: usize,
     caches: Vec<RwLock<Cache>>,
+    evict_cursor: std::sync::atomic::AtomicUsize,
     pending_limit: usize,
     failed: AtomicBool,
     shutting_down: AtomicBool,
@@ -274,10 +317,7 @@ impl Shared {
         if !prefetch {
             self.counters.cache_misses.fetch_add(1, Ordering::Relaxed);
         }
-        let pending = Arc::new(Pending {
-            result: Mutex::new(None),
-            ready: Condvar::new(),
-        });
+        let pending = Arc::new(Pending::new());
         self.caches[page as usize % SHARDS]
             .write()
             .unwrap()
@@ -300,9 +340,10 @@ impl Shared {
             if let Some(lease) = self.pool.try_take() {
                 return Some(lease);
             }
+            let start = self.evict_cursor.fetch_add(1, Ordering::Relaxed);
             let mut evicted = None;
-            for shard in &self.caches {
-                let mut cache = shard.write().unwrap();
+            for offset in 0..SHARDS {
+                let mut cache = self.caches[(start + offset) % SHARDS].write().unwrap();
                 if let Some(victim) = cache.fifo.pop_front() {
                     evicted = cache.entries.remove(&victim);
                     cache.resident -= 1;
@@ -466,12 +507,79 @@ pub(crate) struct DirectReader {
     pub(crate) config: SsdCacheConfig,
     offset: usize,
     pub(crate) length: usize,
+    /// Stage 2 自校准认证门控阈值（位模式存放 f64，0.0 表示关闭并维持 100% CRC 无损全重排）。
+    selective_gate_bits: AtomicU64,
 }
 
-#[derive(Default)]
+enum BatchPageState {
+    Ready(Arc<Page>, bool),
+    Loading(Arc<Pending>),
+    Demand(u64),
+}
+
+#[derive(Clone, Copy)]
+enum SlotMapping {
+    Fallback,
+    Single {
+        batch_idx: usize,
+        lo: usize,
+        hi: usize,
+    },
+    Multi {
+        first_ref: usize,
+        page_count: usize,
+        lo: usize,
+        end_hi: usize,
+    },
+}
+
 pub(crate) struct DirectScratch {
     pub(crate) bytes: Vec<u8>,
     last: Option<(u64, Arc<Page>)>,
+    batch_pages: Vec<(u64, BatchPageState)>,
+    slot_mappings: Vec<SlotMapping>,
+    multi_page_indices: Vec<usize>,
+    tmp_pages: Vec<u64>,
+    shard_buckets: [Vec<usize>; SHARDS],
+    shard_misses: [Vec<usize>; SHARDS],
+    cached_hits_acc: u64,
+    pending_hits_acc: u64,
+    query_page_hits_acc: u64,
+    last_page_idx: Option<usize>,
+}
+
+impl DirectScratch {
+    /// 清空单次查询残留页句柄与状态标记，保留各 Vec 容量以实现稳态零堆分配。
+    #[inline]
+    pub(crate) fn reset_query(&mut self) {
+        self.last = None;
+        self.last_page_idx = None;
+        self.batch_pages.clear();
+        self.slot_mappings.clear();
+        self.multi_page_indices.clear();
+        self.cached_hits_acc = 0;
+        self.pending_hits_acc = 0;
+        self.query_page_hits_acc = 0;
+    }
+}
+
+impl Default for DirectScratch {
+    fn default() -> Self {
+        Self {
+            bytes: Vec::new(),
+            last: None,
+            batch_pages: Vec::new(),
+            slot_mappings: Vec::new(),
+            multi_page_indices: Vec::new(),
+            tmp_pages: Vec::new(),
+            shard_buckets: std::array::from_fn(|_| Vec::new()),
+            shard_misses: std::array::from_fn(|_| Vec::new()),
+            cached_hits_acc: 0,
+            pending_hits_acc: 0,
+            query_page_hits_acc: 0,
+            last_page_idx: None,
+        }
+    }
 }
 
 impl DirectReader {
@@ -496,7 +604,7 @@ impl DirectReader {
         let caches = (0..SHARDS)
             .map(|shard| {
                 RwLock::new(Cache {
-                    entries: HashMap::new(),
+                    entries: PageMap::default(),
                     fifo: VecDeque::new(),
                     resident: 0,
                     capacity: pages / SHARDS + usize::from(shard < pages % SHARDS),
@@ -507,6 +615,7 @@ impl DirectReader {
             file,
             file_len,
             caches,
+            evict_cursor: std::sync::atomic::AtomicUsize::new(0),
             pending_limit: config.inflight_bytes / PAGE,
             failed: AtomicBool::new(false),
             shutting_down: AtomicBool::new(false),
@@ -529,6 +638,7 @@ impl DirectReader {
             config,
             offset,
             length,
+            selective_gate_bits: AtomicU64::new(0.0f64.to_bits()),
         };
         if config.driver == SsdIoDriver::IoUring {
             #[cfg(target_os = "linux")]
@@ -594,18 +704,549 @@ impl DirectReader {
         }
     }
 
+    /// 配置 Stage 2 自校准选择性认证门控的高斯置信倍數（`None` 表示关闭并保持全候选无损精排）。
+    #[inline]
+    pub(crate) fn set_selective_gating(&self, sigma: Option<f64>) {
+        let val = sigma.unwrap_or(0.0);
+        self.selective_gate_bits
+            .store(val.to_bits(), Ordering::Relaxed);
+    }
+
+    /// 读取当前生效的 Stage 2 认证门控倍数；关闭时返回 `None`。
+    #[inline]
+    pub(crate) fn selective_gating(&self) -> Option<f64> {
+        let v = f64::from_bits(self.selective_gate_bits.load(Ordering::Relaxed));
+        (v > 0.0 && v.is_finite()).then_some(v)
+    }
+
+    /// 批量预解析并一次加锁入队全部缺失页，消除滑动小波次带来的碎片化 io_uring 提交与重复锁查找。
+    pub(crate) fn prepare_rerank_batch(
+        &self,
+        slots: &[usize],
+        stride: usize,
+        scratch: &mut DirectScratch,
+    ) {
+        self.prepare_rerank_batch_impl(slots, stride, scratch, true);
+    }
+
+    /// Stage 2 仅预映射槽位并拉取当前已命中内存页，未命中页留作 Demand 供门控后按需入队。
+    pub(crate) fn probe_rerank_batch_hits(
+        &self,
+        slots: &[usize],
+        stride: usize,
+        scratch: &mut DirectScratch,
+    ) {
+        self.prepare_rerank_batch_impl(slots, stride, scratch, false);
+    }
+
+    fn prepare_rerank_batch_impl(
+        &self,
+        slots: &[usize],
+        stride: usize,
+        scratch: &mut DirectScratch,
+        enqueue_all: bool,
+    ) {
+        scratch.batch_pages.clear();
+        scratch.slot_mappings.clear();
+        scratch.multi_page_indices.clear();
+        scratch.tmp_pages.clear();
+        for bucket in &mut scratch.shard_buckets {
+            bucket.clear();
+        }
+        for misses in &mut scratch.shard_misses {
+            misses.clear();
+        }
+        scratch.last_page_idx = None;
+        scratch.cached_hits_acc = 0;
+        scratch.pending_hits_acc = 0;
+        scratch.query_page_hits_acc = 0;
+
+        if self.config.prefetch_window == 0
+            || self.config.cache_bytes == 0
+            || stride == 0
+            || slots.is_empty()
+        {
+            return;
+        }
+        scratch.last = None;
+        let cache_pages = self.config.cache_bytes / PAGE;
+        let max_pages = (cache_pages / 2)
+            .min(self.shared.pending_limit)
+            .clamp(1, 1024);
+
+        for &slot in slots {
+            let Ok((start, end)) = self.range(slot, stride) else {
+                continue;
+            };
+            for page in start / PAGE..=(end - 1) / PAGE {
+                scratch.tmp_pages.push(page as u64);
+            }
+        }
+        if scratch.tmp_pages.is_empty() {
+            scratch
+                .slot_mappings
+                .resize(slots.len(), SlotMapping::Fallback);
+            return;
+        }
+        scratch.tmp_pages.sort_unstable();
+        scratch.tmp_pages.dedup();
+        if scratch.tmp_pages.len() > max_pages {
+            scratch.tmp_pages.truncate(max_pages);
+        }
+
+        scratch.batch_pages.reserve(scratch.tmp_pages.len());
+        for (idx, &page) in scratch.tmp_pages.iter().enumerate() {
+            scratch
+                .batch_pages
+                .push((page, BatchPageState::Demand(page)));
+            scratch.shard_buckets[page as usize % SHARDS].push(idx);
+        }
+
+        scratch.slot_mappings.reserve(slots.len());
+        let mut prefetched_touches = 0u64;
+        for &slot in slots {
+            let Ok((start, end)) = self.range(slot, stride) else {
+                scratch.slot_mappings.push(SlotMapping::Fallback);
+                continue;
+            };
+            let p0 = (start / PAGE) as u64;
+            let p1 = ((end - 1) / PAGE) as u64;
+            if p0 == p1 {
+                if let Ok(batch_idx) = scratch.tmp_pages.binary_search(&p0) {
+                    let lo = start - (p0 as usize) * PAGE;
+                    scratch.slot_mappings.push(SlotMapping::Single {
+                        batch_idx,
+                        lo,
+                        hi: lo + stride,
+                    });
+                    prefetched_touches += 1;
+                } else {
+                    scratch.slot_mappings.push(SlotMapping::Fallback);
+                }
+            } else {
+                let first_ref = scratch.multi_page_indices.len();
+                let mut all_ok = true;
+                for p in p0..=p1 {
+                    if let Ok(batch_idx) = scratch.tmp_pages.binary_search(&p) {
+                        scratch.multi_page_indices.push(batch_idx);
+                    } else {
+                        all_ok = false;
+                        break;
+                    }
+                }
+                if all_ok {
+                    let page_count = scratch.multi_page_indices.len() - first_ref;
+                    let lo = start - (p0 as usize) * PAGE;
+                    let end_hi = end - (p1 as usize) * PAGE;
+                    scratch.slot_mappings.push(SlotMapping::Multi {
+                        first_ref,
+                        page_count,
+                        lo,
+                        end_hi,
+                    });
+                    prefetched_touches += page_count as u64;
+                } else {
+                    scratch.multi_page_indices.truncate(first_ref);
+                    scratch.slot_mappings.push(SlotMapping::Fallback);
+                }
+            }
+        }
+        if enqueue_all && prefetched_touches > 0 {
+            self.shared
+                .counters
+                .prefetch_requests
+                .fetch_add(prefetched_touches, Ordering::Relaxed);
+        }
+
+        let mut has_misses = false;
+        for shard in 0..SHARDS {
+            let bucket = &scratch.shard_buckets[shard];
+            if bucket.is_empty() {
+                continue;
+            }
+            let guard = self.shared.caches[shard].read().unwrap();
+            for &u_idx in bucket {
+                let page = scratch.batch_pages[u_idx].0;
+                match guard.entries.get(&page) {
+                    Some(Entry::Ready(data)) => {
+                        scratch.batch_pages[u_idx].1 =
+                            BatchPageState::Ready(Arc::clone(data), false);
+                    }
+                    Some(Entry::Loading(pending)) => {
+                        scratch.batch_pages[u_idx].1 = BatchPageState::Loading(Arc::clone(pending));
+                    }
+                    None => {
+                        if enqueue_all {
+                            scratch.shard_misses[shard].push(u_idx);
+                            has_misses = true;
+                        }
+                    }
+                }
+            }
+        }
+        if enqueue_all && has_misses {
+            self.enqueue_shard_misses(scratch);
+        }
+    }
+
+    /// Stage 2 仅对选定位置集合按分片归集仍处于 Demand 的物理页并单波批量提交 io_uring。
+    pub(crate) fn enqueue_rerank_positions(
+        &self,
+        positions: &[usize],
+        scratch: &mut DirectScratch,
+    ) {
+        if positions.is_empty() || scratch.slot_mappings.is_empty() {
+            return;
+        }
+        for misses in &mut scratch.shard_misses {
+            misses.clear();
+        }
+        let mut touches = 0u64;
+        for &pos in positions {
+            let Some(&mapping) = scratch.slot_mappings.get(pos) else {
+                continue;
+            };
+            match mapping {
+                SlotMapping::Fallback => {}
+                SlotMapping::Single { batch_idx, .. } => {
+                    touches += 1;
+                    if let BatchPageState::Demand(page) = scratch.batch_pages[batch_idx].1 {
+                        scratch.shard_misses[page as usize % SHARDS].push(batch_idx);
+                    }
+                }
+                SlotMapping::Multi {
+                    first_ref,
+                    page_count,
+                    ..
+                } => {
+                    touches += page_count as u64;
+                    for k in 0..page_count {
+                        let batch_idx = scratch.multi_page_indices[first_ref + k];
+                        if let BatchPageState::Demand(page) = scratch.batch_pages[batch_idx].1 {
+                            scratch.shard_misses[page as usize % SHARDS].push(batch_idx);
+                        }
+                    }
+                }
+            }
+        }
+        if touches > 0 {
+            self.shared
+                .counters
+                .prefetch_requests
+                .fetch_add(touches, Ordering::Relaxed);
+        }
+        let mut has_misses = false;
+        for misses in &mut scratch.shard_misses {
+            if !misses.is_empty() {
+                misses.sort_unstable();
+                misses.dedup();
+                has_misses = true;
+            }
+        }
+        if has_misses {
+            self.enqueue_shard_misses(scratch);
+        }
+    }
+
+    /// 在单一 `queue` 锁内依次检查写分片缓存并发布缺失页任务，最后唤醒一次 I/O 工作线程。
+    fn enqueue_shard_misses(&self, scratch: &mut DirectScratch) {
+        let mut pushed = 0u64;
+        let mut skipped = 0u64;
+        {
+            let mut queue = self.shared.queue.lock().unwrap();
+            if queue.failure.is_none() && !queue.shutdown {
+                let mut avail = self
+                    .shared
+                    .pending_limit
+                    .saturating_sub(queue.tasks.len() + queue.active);
+                for shard in 0..SHARDS {
+                    let misses = &scratch.shard_misses[shard];
+                    if misses.is_empty() {
+                        continue;
+                    }
+                    let mut guard = self.shared.caches[shard].write().unwrap();
+                    for &u_idx in misses {
+                        let page = scratch.batch_pages[u_idx].0;
+                        match guard.entries.get(&page) {
+                            Some(Entry::Ready(data)) => {
+                                scratch.batch_pages[u_idx].1 =
+                                    BatchPageState::Ready(Arc::clone(data), false);
+                            }
+                            Some(Entry::Loading(pending)) => {
+                                scratch.batch_pages[u_idx].1 =
+                                    BatchPageState::Loading(Arc::clone(pending));
+                            }
+                            None => {
+                                if avail > 0 {
+                                    avail -= 1;
+                                    pushed += 1;
+                                    let pending = Arc::new(Pending::new());
+                                    guard
+                                        .entries
+                                        .insert(page, Entry::Loading(Arc::clone(&pending)));
+                                    queue.tasks.push_back(Task {
+                                        page,
+                                        result: Arc::clone(&pending),
+                                        prefetched: true,
+                                    });
+                                    scratch.batch_pages[u_idx].1 = BatchPageState::Loading(pending);
+                                } else {
+                                    skipped += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                if pushed > 0 {
+                    self.shared
+                        .counters
+                        .pending_peak
+                        .fetch_max((queue.tasks.len() + queue.active) as u64, Ordering::Relaxed);
+                }
+            }
+        }
+        if skipped > 0 {
+            self.shared
+                .counters
+                .prefetch_skipped
+                .fetch_add(skipped, Ordering::Relaxed);
+        }
+        if pushed > 0 {
+            self.shared.available.notify_one();
+        }
+    }
+
+    #[inline]
+    pub(crate) fn is_slot_ready(&self, pos: usize, scratch: &DirectScratch) -> bool {
+        let Some(&mapping) = scratch.slot_mappings.get(pos) else {
+            return true;
+        };
+        match mapping {
+            SlotMapping::Fallback => true,
+            SlotMapping::Single { batch_idx, .. } => {
+                matches!(
+                    scratch.batch_pages[batch_idx].1,
+                    BatchPageState::Ready(_, _)
+                )
+            }
+            SlotMapping::Multi {
+                first_ref,
+                page_count,
+                ..
+            } => (0..page_count).all(|k| {
+                let idx = scratch.multi_page_indices[first_ref + k];
+                matches!(scratch.batch_pages[idx].1, BatchPageState::Ready(_, _))
+            }),
+        }
+    }
+
+    #[inline]
+    pub(crate) fn try_upgrade_slot_ready(
+        &self,
+        pos: usize,
+        scratch: &mut DirectScratch,
+    ) -> Result<bool> {
+        let Some(&mapping) = scratch.slot_mappings.get(pos) else {
+            return Ok(true);
+        };
+        match mapping {
+            SlotMapping::Fallback => Ok(true),
+            SlotMapping::Single { batch_idx, .. } => Self::try_upgrade_page(batch_idx, scratch),
+            SlotMapping::Multi {
+                first_ref,
+                page_count,
+                ..
+            } => {
+                let mut all_ready = true;
+                for k in 0..page_count {
+                    let idx = scratch.multi_page_indices[first_ref + k];
+                    if !Self::try_upgrade_page(idx, scratch)? {
+                        all_ready = false;
+                    }
+                }
+                Ok(all_ready)
+            }
+        }
+    }
+
+    #[inline]
+    fn try_upgrade_page(batch_idx: usize, scratch: &mut DirectScratch) -> Result<bool> {
+        match &scratch.batch_pages[batch_idx].1 {
+            BatchPageState::Ready(_, _) => Ok(true),
+            BatchPageState::Loading(pending) => match pending.try_ready() {
+                Some(Ok(page)) => {
+                    scratch.batch_pages[batch_idx].1 = BatchPageState::Ready(page, true);
+                    Ok(true)
+                }
+                Some(Err(error)) => Err(error),
+                None => Ok(false),
+            },
+            BatchPageState::Demand(_) => Ok(false),
+        }
+    }
+
+    #[inline]
+    fn resolve_batch_page_ready(batch_idx: usize, scratch: &mut DirectScratch) -> Result<()> {
+        match &mut scratch.batch_pages[batch_idx].1 {
+            BatchPageState::Ready(_, from_loading) => {
+                if scratch.last_page_idx == Some(batch_idx) {
+                    scratch.query_page_hits_acc += 1;
+                } else if *from_loading {
+                    *from_loading = false;
+                    scratch.pending_hits_acc += 1;
+                    scratch.last_page_idx = Some(batch_idx);
+                } else {
+                    scratch.cached_hits_acc += 1;
+                    scratch.last_page_idx = Some(batch_idx);
+                }
+                Ok(())
+            }
+            BatchPageState::Loading(pending) => {
+                let page = pending.wait()?;
+                scratch.batch_pages[batch_idx].1 = BatchPageState::Ready(page, false);
+                scratch.pending_hits_acc += 1;
+                scratch.last_page_idx = Some(batch_idx);
+                Ok(())
+            }
+            BatchPageState::Demand(_) => unreachable!(),
+        }
+    }
+
+    pub(crate) fn record_prepared<'a>(
+        &self,
+        pos: usize,
+        slot: usize,
+        stride: usize,
+        scratch: &'a mut DirectScratch,
+    ) -> Result<&'a [u8]> {
+        let Some(&mapping) = scratch.slot_mappings.get(pos) else {
+            return self.record(slot, stride, scratch);
+        };
+        match mapping {
+            SlotMapping::Fallback => self.record(slot, stride, scratch),
+            SlotMapping::Single { batch_idx, lo, hi } => {
+                if matches!(scratch.batch_pages[batch_idx].1, BatchPageState::Demand(_)) {
+                    return self.record(slot, stride, scratch);
+                }
+                self.shared.check_error()?;
+                Self::resolve_batch_page_ready(batch_idx, scratch)?;
+                let BatchPageState::Ready(ref page, _) = scratch.batch_pages[batch_idx].1 else {
+                    unreachable!();
+                };
+                page.consume();
+                if hi > page.valid {
+                    return Err(Error::CorruptIndex("SSD 页不包含完整记录"));
+                }
+                Ok(&page.bytes()[lo..hi])
+            }
+            SlotMapping::Multi {
+                first_ref,
+                page_count,
+                lo,
+                end_hi,
+            } => {
+                for k in 0..page_count {
+                    let idx = scratch.multi_page_indices[first_ref + k];
+                    if matches!(scratch.batch_pages[idx].1, BatchPageState::Demand(_)) {
+                        return self.record(slot, stride, scratch);
+                    }
+                }
+                self.shared.check_error()?;
+                scratch.bytes.clear();
+                scratch.bytes.reserve(stride);
+                for k in 0..page_count {
+                    let idx = scratch.multi_page_indices[first_ref + k];
+                    Self::resolve_batch_page_ready(idx, scratch)?;
+                    let BatchPageState::Ready(ref page, _) = scratch.batch_pages[idx].1 else {
+                        unreachable!();
+                    };
+                    page.consume();
+                    let p_lo = if k == 0 { lo } else { 0 };
+                    let p_hi = if k + 1 == page_count { end_hi } else { PAGE };
+                    if p_hi > page.valid {
+                        return Err(Error::CorruptIndex("SSD 页不包含完整记录"));
+                    }
+                    scratch.bytes.extend_from_slice(&page.bytes()[p_lo..p_hi]);
+                }
+                Ok(&scratch.bytes)
+            }
+        }
+    }
+
+    pub(crate) fn finish_rerank_batch(&self, scratch: &mut DirectScratch) {
+        if scratch.cached_hits_acc > 0 {
+            self.shared
+                .counters
+                .cache_hits
+                .fetch_add(scratch.cached_hits_acc, Ordering::Relaxed);
+            scratch.cached_hits_acc = 0;
+        }
+        if scratch.pending_hits_acc > 0 {
+            self.shared
+                .counters
+                .pending_hits
+                .fetch_add(scratch.pending_hits_acc, Ordering::Relaxed);
+            scratch.pending_hits_acc = 0;
+        }
+        if scratch.query_page_hits_acc > 0 {
+            self.shared
+                .counters
+                .query_page_hits
+                .fetch_add(scratch.query_page_hits_acc, Ordering::Relaxed);
+            scratch.query_page_hits_acc = 0;
+        }
+        scratch.last_page_idx = None;
+        scratch.batch_pages.clear();
+        scratch.slot_mappings.clear();
+        scratch.multi_page_indices.clear();
+    }
+
     pub(crate) fn record<'a>(
         &self,
         slot: usize,
         stride: usize,
         scratch: &'a mut DirectScratch,
     ) -> Result<&'a [u8]> {
+        if stride == 0 {
+            return Ok(&[]);
+        }
         let (start, end) = self.range(slot, stride)?;
         self.shared.check_error()?;
+        let p0 = (start / PAGE) as u64;
+        let p1 = ((end - 1) / PAGE) as u64;
+        if p0 == p1 {
+            let data = if let Some((last, data)) = &scratch.last
+                && *last == p0
+            {
+                self.shared
+                    .counters
+                    .query_page_hits
+                    .fetch_add(1, Ordering::Relaxed);
+                Arc::clone(data)
+            } else {
+                scratch.last = None;
+                match self
+                    .shared
+                    .request(p0, false)?
+                    .ok_or(Error::CorruptIndex("需求读取未取得页句柄"))?
+                {
+                    Entry::Ready(data) => data,
+                    Entry::Loading(pending) => pending.wait()?,
+                }
+            };
+            data.consume();
+            let page_start = p0 as usize * PAGE;
+            let lo = start - page_start;
+            let hi = end - page_start;
+            if hi > data.valid {
+                return Err(Error::CorruptIndex("SSD 页不包含完整记录"));
+            }
+            scratch.last = Some((p0, data));
+            return Ok(&scratch.last.as_ref().unwrap().1.bytes()[lo..hi]);
+        }
         scratch.bytes.clear();
         scratch.bytes.reserve(stride);
-        for page in start / PAGE..=(end - 1) / PAGE {
-            let page = page as u64;
+        for page in p0..=p1 {
             let data = if let Some((last, data)) = &scratch.last
                 && *last == page
             {

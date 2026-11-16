@@ -61,6 +61,35 @@ impl Index {
         }
     }
 
+    /// 启用或关闭 SSD 直接重排的 Stage 2 自校准选择性认证门控（`None` 保持 100% 无损全候选精排）。
+    ///
+    /// 启用后对单次缺失候选超过阈值的查询先提交首波锚点与内存命中重叠，再以同页免费共享
+    /// 及查询内自校准共形下界裁剪无望尾页，显著减少 NVMe 读取页数并保持接近零损失的召回率。
+    pub fn set_ssd_selective_gating(&mut self, sigma: Option<f64>) -> Result<()> {
+        if let Some(z) = sigma
+            && (!z.is_finite() || z <= 0.0)
+        {
+            return Err(Error::InvalidSearchConfig(
+                "SSD 选择性门控倍数必须为正有限数",
+            ));
+        }
+        let Some(reader) = self.rerank.as_ref().and_then(|store| store.direct.as_ref()) else {
+            return Err(Error::InvalidRerankConfig(
+                "请先通过 open_ssd 或 set_ssd_cache_config 启用直接 SSD 读取",
+            ));
+        };
+        reader.set_selective_gating(sigma);
+        Ok(())
+    }
+
+    /// 返回当前直接 SSD 读取的 Stage 2 自校准选择性门控倍数；未启用或非 SSD 模式返回 `None`。
+    pub fn ssd_selective_gating(&self) -> Option<f64> {
+        self.rerank
+            .as_ref()
+            .and_then(|store| store.direct.as_ref())
+            .and_then(|reader| reader.selective_gating())
+    }
+
     pub fn rerank_config(&self) -> RerankConfig {
         self.rerank
             .as_ref()
@@ -193,6 +222,87 @@ impl Index {
         let mut seen = HashSet::new();
         let mut buffer = crate::storage::RerankScratch::default();
         let mut scores = Vec::with_capacity(candidates.len().min(self.len()));
+        if let Some(store) = &self.rerank
+            && let Some(reader) = store.direct.as_ref()
+            && reader.config.prefetch_window > 0
+        {
+            // 纯重排直读模式：一次批量锁入队与零拷贝命中优先重叠计算。
+            let mut valid_ids = Vec::with_capacity(candidates.len().min(self.len()));
+            for &id in candidates {
+                if !seen.insert(id) {
+                    continue;
+                }
+                let Some(&slot) = self.id_to_slot.get(&id) else {
+                    continue;
+                };
+                valid_ids.push(id);
+                buffer.slots.push(slot);
+            }
+            if !valid_ids.is_empty() {
+                struct BatchGuard<'a> {
+                    reader: &'a crate::storage::DirectReader,
+                    buf: &'a mut crate::storage::RerankScratch,
+                }
+                impl Drop for BatchGuard<'_> {
+                    fn drop(&mut self) {
+                        self.reader.finish_rerank_batch(&mut self.buf.io);
+                    }
+                }
+                let slots = std::mem::take(&mut buffer.slots);
+                reader.prepare_rerank_batch(&slots, store.stride, &mut buffer.io);
+                let guard = BatchGuard {
+                    reader,
+                    buf: &mut buffer,
+                };
+                let mut misses = Vec::new();
+                for (pos, (&id, &slot)) in valid_ids.iter().zip(&slots).enumerate() {
+                    if !guard.reader.is_slot_ready(pos, &guard.buf.io) {
+                        misses.push(pos);
+                        continue;
+                    }
+                    let value =
+                        store.score_prepared(query, factor, pos, slot, self.metric, guard.buf)?;
+                    scores.push((id, convert_cold_rerank_score(value, self.metric)));
+                }
+                let mut pending = Vec::new();
+                for &pos in &misses {
+                    if guard
+                        .reader
+                        .try_upgrade_slot_ready(pos, &mut guard.buf.io)?
+                    {
+                        let value = store.score_prepared(
+                            query,
+                            factor,
+                            pos,
+                            slots[pos],
+                            self.metric,
+                            guard.buf,
+                        )?;
+                        scores.push((
+                            valid_ids[pos],
+                            convert_cold_rerank_score(value, self.metric),
+                        ));
+                    } else {
+                        pending.push(pos);
+                    }
+                }
+                for &pos in &pending {
+                    let value = store.score_prepared(
+                        query,
+                        factor,
+                        pos,
+                        slots[pos],
+                        self.metric,
+                        guard.buf,
+                    )?;
+                    scores.push((
+                        valid_ids[pos],
+                        convert_cold_rerank_score(value, self.metric),
+                    ));
+                }
+            }
+            return rank_scores(scores, top_k);
+        }
         for &id in candidates {
             if !seen.insert(id) {
                 continue;
@@ -202,10 +312,7 @@ impl Index {
             };
             let score = if let Some(store) = &self.rerank {
                 let value = store.score(query, factor, slot, self.metric, &mut buffer)?;
-                match self.metric {
-                    Metric::Cosine => value,
-                    Metric::Poincare { curvature } => -poincare_distance(value, curvature),
-                }
+                convert_cold_rerank_score(value, self.metric)
             } else {
                 let vector = self.vectors.row(slot, self.dimensions);
                 match self.metric {
@@ -219,6 +326,14 @@ impl Index {
             scores.push((id, score));
         }
         rank_scores(scores, top_k)
+    }
+}
+
+#[inline]
+fn convert_cold_rerank_score(value: f64, metric: Metric) -> f64 {
+    match metric {
+        Metric::Cosine => value,
+        Metric::Poincare { curvature } => -poincare_distance(value, curvature),
     }
 }
 

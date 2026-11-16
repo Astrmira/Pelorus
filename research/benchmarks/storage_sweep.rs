@@ -235,6 +235,7 @@ fn run(
     plan: &Value,
     output: &Path,
     margin: f32,
+    cli_ssd_gate: Option<f64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let dim = number(plan, "dimensions", 512);
     let nq = number(plan, "queries", 10000);
@@ -297,6 +298,10 @@ fn run(
     };
     if plan["rerank_override"].as_str() == Some("fp32") {
         index.set_rerank_config(RerankConfig::default())?;
+    }
+    let effective_gate = cli_ssd_gate.or_else(|| plan["ssd_gate"].as_f64());
+    if let Some(gate_sigma) = effective_gate {
+        index.set_ssd_selective_gating(Some(gate_sigma))?;
     }
     let topology_crc32 = index.graph_diagnostics().topology_crc32;
     if plan["expected_topology_crc32"]
@@ -510,6 +515,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let phase = arg("--phase", "run");
     let margin = arg("--margin", "0.08").parse()?;
+    let ssd_gate: Option<f64> = {
+        let raw = arg("--ssd-gate", "");
+        if raw.is_empty() {
+            None
+        } else {
+            Some(raw.parse()?)
+        }
+    };
     configure(margin);
     let data = PathBuf::from(arg("--data", "."));
     let output = PathBuf::from(arg("--output", "storage.jsonl"));
@@ -538,6 +551,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
     } else {
         let plan: Value = serde_json::from_slice(&fs::read(arg("--plan", "plan.json"))?)?;
-        run(&data, &plan, &output, margin)
+        run(&data, &plan, &output, margin, ssd_gate)
     }
 }

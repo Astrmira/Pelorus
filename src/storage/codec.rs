@@ -20,11 +20,30 @@ pub(crate) struct PreparedRow {
     multiplier: f64,
 }
 
-/// 每次公开查询独立创建，查询范数缓存仅在该次调用中复用。
+/// 每次公开查询独立创建或从线程局部缓冲复用，查询范数与 SSD 批重排切片均保持稳态零分配。
 #[derive(Default)]
 pub(crate) struct RerankScratch {
-    query_norm: Option<f64>,
-    io: DirectScratch,
+    pub(crate) query_norm: Option<f64>,
+    pub(crate) io: DirectScratch,
+    pub(crate) slots: Vec<usize>,
+    pub(crate) misses: Vec<usize>,
+    pub(crate) pending: Vec<usize>,
+    pub(crate) ready_pos: Vec<usize>,
+    pub(crate) survivors: Vec<usize>,
+}
+
+impl RerankScratch {
+    /// 清除单次查询相关的临时页句柄与状态，保留内部 Vec 容量供后续查询复用。
+    #[inline]
+    pub(crate) fn reset_query(&mut self) {
+        self.query_norm = None;
+        self.io.reset_query();
+        self.slots.clear();
+        self.misses.clear();
+        self.pending.clear();
+        self.ready_pos.clear();
+        self.survivors.clear();
+    }
 }
 
 impl ColdStore {
@@ -419,6 +438,33 @@ impl ColdStore {
     }
 
     #[inline]
+    fn score_row(
+        &self,
+        query: &[f32],
+        query_factor: f64,
+        slot: usize,
+        row: &[u8],
+        metric: Metric,
+        query_norm: &mut Option<f64>,
+    ) -> f64 {
+        let prepared = self.prepared[slot];
+        let dot = metric == Metric::Cosine;
+        let sum =
+            super::scoring::accumulate(query, row, self.config, &self.center, prepared.scale, dot);
+        match metric {
+            Metric::Poincare { .. } => sum * query_factor * prepared.multiplier,
+            Metric::Cosine => {
+                let norm = *query_norm.get_or_insert_with(|| norm_squared_f64(query).sqrt());
+                if prepared.multiplier == 0.0 || norm == 0.0 {
+                    0.0
+                } else {
+                    (sum * prepared.multiplier / norm).clamp(-1.0, 1.0)
+                }
+            }
+        }
+    }
+
+    #[inline]
     pub(crate) fn score(
         &self,
         query: &[f32],
@@ -427,30 +473,37 @@ impl ColdStore {
         metric: Metric,
         scratch: &mut RerankScratch,
     ) -> Result<f64> {
+        let RerankScratch { query_norm, io, .. } = scratch;
         let row = if let Some(reader) = &self.direct
             && slot * self.stride < reader.length
         {
-            reader.record(slot, self.stride, &mut scratch.io)?
+            reader.record(slot, self.stride, io)?
         } else {
             self.bytes.row(slot, self.stride)
         };
-        let prepared = self.prepared[slot];
-        let dot = metric == Metric::Cosine;
-        let sum =
-            super::scoring::accumulate(query, row, self.config, &self.center, prepared.scale, dot);
-        Ok(match metric {
-            Metric::Poincare { .. } => sum * query_factor * prepared.multiplier,
-            Metric::Cosine => {
-                let query_norm = *scratch
-                    .query_norm
-                    .get_or_insert_with(|| norm_squared_f64(query).sqrt());
-                if prepared.multiplier == 0.0 || query_norm == 0.0 {
-                    0.0
-                } else {
-                    (sum * prepared.multiplier / query_norm).clamp(-1.0, 1.0)
-                }
-            }
-        })
+        Ok(self.score_row(query, query_factor, slot, row, metric, query_norm))
+    }
+
+    /// 对已完成批预解析的位置执行直读零拷贝打分（单页路径直接借用页内切片）。
+    #[inline]
+    pub(crate) fn score_prepared(
+        &self,
+        query: &[f32],
+        query_factor: f64,
+        pos: usize,
+        slot: usize,
+        metric: Metric,
+        scratch: &mut RerankScratch,
+    ) -> Result<f64> {
+        let RerankScratch { query_norm, io, .. } = scratch;
+        let row = if let Some(reader) = &self.direct
+            && slot * self.stride < reader.length
+        {
+            reader.record_prepared(pos, slot, self.stride, io)?
+        } else {
+            self.bytes.row(slot, self.stride)
+        };
+        Ok(self.score_row(query, query_factor, slot, row, metric, query_norm))
     }
 
     #[inline]

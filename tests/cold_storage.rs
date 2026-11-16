@@ -623,4 +623,74 @@ fn 直接读取缓存的普通查询命中扩容与增量保存均保留结果()
     );
     ssd.set_storage_mode(StorageMode::Memory).unwrap();
     assert_eq!(ssd.ssd_cache_config(), None);
+    assert_eq!(ssd.ssd_selective_gating(), None);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn 选择性门控参数校验并在多页直读上削减尾页读取且保持召回() {
+    use quiver_ann::SsdCacheConfig;
+    let dim = 512;
+    let n = 400;
+    let vectors = data(n, dim);
+    let mut index = build(&vectors, dim);
+    index.prepare_colocated_hot_store(true).unwrap();
+    // 使用 Mmap 状态设置门控须报错
+    assert!(index.set_ssd_selective_gating(Some(2.5)).is_err());
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("gated.pelorus");
+    index.save_snapshot(&path).unwrap();
+
+    // 768 KiB 远低于非特权 Linux 8 MiB RLIMIT_MEMLOCK 上限，同时提供 >= 64 页批量映射空间
+    let cfg = SsdCacheConfig {
+        cache_bytes: 128 * 4096,
+        inflight_bytes: 64 * 4096,
+        io_workers: 1,
+        prefetch_window: 32,
+        ..SsdCacheConfig::default()
+    };
+    let mut ssd = Index::open_ssd(&path, cfg).unwrap();
+    assert_eq!(ssd.ssd_selective_gating(), None);
+    assert!(ssd.set_ssd_selective_gating(Some(0.0)).is_err());
+    assert!(ssd.set_ssd_selective_gating(Some(-1.0)).is_err());
+    assert!(ssd.set_ssd_selective_gating(Some(f64::NAN)).is_err());
+
+    let query = &vectors[..dim];
+    let sc = SearchConfig {
+        top_k: 10,
+        ef_search: 64,
+        rerank_limit: Some(64),
+    };
+    let exact_before = ssd.ssd_io_stats().unwrap().read_calls;
+    let exact_res = ssd.search(query, &sc).unwrap();
+    ssd.drain_ssd_reads();
+    let exact_delta = ssd.ssd_io_stats().unwrap().read_calls - exact_before;
+
+    ssd.clear_ssd_cache();
+    ssd.set_ssd_selective_gating(Some(2.5)).unwrap();
+    assert_eq!(ssd.ssd_selective_gating(), Some(2.5));
+    let gated_before = ssd.ssd_io_stats().unwrap().read_calls;
+    let gated_res = ssd.search(query, &sc).unwrap();
+    ssd.drain_ssd_reads();
+    let gated_delta = ssd.ssd_io_stats().unwrap().read_calls - gated_before;
+
+    assert!(exact_delta > 0 && gated_delta > 0);
+    assert!(
+        gated_delta <= exact_delta,
+        "gated_delta={gated_delta} 不应超过 exact_delta={exact_delta}"
+    );
+    let exact_ids: std::collections::HashSet<u64> = exact_res.iter().map(|r| r.0).collect();
+    let overlap = gated_res
+        .iter()
+        .filter(|r| exact_ids.contains(&r.0))
+        .count();
+    assert!(
+        overlap >= 9,
+        "选择性门控至少保留 9/10 无损重排结果，实际重合={overlap}"
+    );
+
+    ssd.set_ssd_selective_gating(None).unwrap();
+    assert_eq!(ssd.ssd_selective_gating(), None);
+    assert_eq!(ssd.search(query, &sc).unwrap(), exact_res);
 }
