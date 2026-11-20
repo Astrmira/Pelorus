@@ -241,6 +241,10 @@ fn run(
     let nq = number(plan, "queries", 10000);
     let warm = number(plan, "warmup_queries", 2000);
     let threads = number(plan, "threads", 1);
+    let trace_io = plan["trace_ssd_io"].as_bool().unwrap_or(false);
+    if trace_io && !cfg!(feature = "ssd-trace") {
+        return Err("逐查询 I/O 计量需要 ssd-trace 构建".into());
+    }
     if ![1, 2, 4, 8, 16, 24].contains(&threads) {
         return Err("查询线程仅使用1/2/4/8/16/24".into());
     }
@@ -345,9 +349,24 @@ fn run(
             .par_iter()
             .map(|&query_id| {
                 let wall = Instant::now();
-                let result =
-                    index.search(&queries[query_id * dim..(query_id + 1) * dim], &config)?;
-                Ok((query_id, wall.elapsed().as_nanos() as u64, result))
+                let search =
+                    || index.search(&queries[query_id * dim..(query_id + 1) * dim], &config);
+                #[cfg(feature = "ssd-trace")]
+                let (result, trace) = if trace_io {
+                    let (result, trace) = quiver_ann::research::trace_ssd_io(search);
+                    (result, Some(trace))
+                } else {
+                    (search(), None)
+                };
+                #[cfg(not(feature = "ssd-trace"))]
+                let result = search();
+                Ok((
+                    query_id,
+                    wall.elapsed().as_nanos() as u64,
+                    result?,
+                    #[cfg(feature = "ssd-trace")]
+                    trace,
+                ))
             })
             .collect::<quiver_ann::Result<Vec<_>>>()?;
         index.drain_ssd_reads();
@@ -356,6 +375,39 @@ fn run(
         let proc_after = proc_fields("/proc/self/io");
         let cache_after = index.ssd_io_stats();
         rows.sort_unstable_by_key(|row| row.0);
+        #[cfg(feature = "ssd-trace")]
+        if trace_io {
+            let path = output.with_file_name(format!(
+                "{}.{}.io.csv",
+                output.file_stem().unwrap().to_string_lossy(),
+                name
+            ));
+            let mut io = std::io::BufWriter::new(File::create(path)?);
+            writeln!(
+                io,
+                "query_id,latency_ns,logical_bytes,completed_bytes,ready_hits,joined_reads,page_wait_ns,owned_pages"
+            )?;
+            for (id, ns, _, trace) in &rows {
+                let trace = trace.as_ref().expect("已为每次查询启用 I/O 计量");
+                write!(
+                    io,
+                    "{id},{ns},{},{},{},{},{},",
+                    trace.logical_bytes,
+                    trace.completed_bytes(),
+                    trace.ready_hits,
+                    trace.joined_reads,
+                    trace.page_wait_ns
+                )?;
+                for (i, page) in trace.owned_pages.iter().enumerate() {
+                    if i > 0 {
+                        write!(io, "|")?;
+                    }
+                    write!(io, "{page}")?;
+                }
+                writeln!(io)?;
+            }
+            io.flush()?;
+        }
         let mut result_crc = crc32fast::Hasher::new();
         let mut total_hits = 0;
         let mut latency = Vec::with_capacity(nq);
@@ -365,7 +417,7 @@ fn run(
             name
         )))?;
         writeln!(requests, "query_id,latency_ns,hits,ids,score_bits")?;
-        for (query_id, ns, result) in &rows {
+        for (query_id, ns, result, ..) in &rows {
             if result.len() != 10
                 || result.iter().any(|row| !row.1.is_finite())
                 || result.windows(2).any(|pair| pair[0].1 < pair[1].1)

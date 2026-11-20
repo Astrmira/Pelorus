@@ -477,7 +477,10 @@ impl ColdStore {
         let row = if let Some(reader) = &self.direct
             && slot * self.stride < reader.length
         {
-            reader.record(slot, self.stride, io)?
+            let row = reader.record(slot, self.stride, io)?;
+            #[cfg(feature = "ssd-trace")]
+            super::trace::update(|trace| trace.logical_bytes += row.len() as u64);
+            row
         } else {
             self.bytes.row(slot, self.stride)
         };
@@ -499,7 +502,10 @@ impl ColdStore {
         let row = if let Some(reader) = &self.direct
             && slot * self.stride < reader.length
         {
-            reader.record_prepared(pos, slot, self.stride, io)?
+            let row = reader.record_prepared(pos, slot, self.stride, io)?;
+            #[cfg(feature = "ssd-trace")]
+            super::trace::update(|trace| trace.logical_bytes += row.len() as u64);
+            row
         } else {
             self.bytes.row(slot, self.stride)
         };
@@ -570,9 +576,9 @@ impl ColdStore {
 
     pub(crate) fn enable_direct(&mut self, config: SsdCacheConfig) -> Result<()> {
         let reader = if let Some((file, offset, length)) = self.bytes.file_source() {
-            DirectReader::open(&file, offset, length, config)?
+            DirectReader::open(&file, offset, length, self.config.precision, config)?
         } else if self.bytes.len() == 0 {
-            DirectReader::open(&tempfile::tempfile()?, 0, 0, config)?
+            DirectReader::open(&tempfile::tempfile()?, 0, 0, self.config.precision, config)?
         } else {
             return Err(Error::InvalidRerankConfig(
                 "直接 SSD 后端需要已映射的冷向量文件",

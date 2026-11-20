@@ -1,6 +1,6 @@
 //! 有界共享页缓存、在途缓冲池及 Linux O_DIRECT 预读。
 
-use super::{SsdCacheConfig, SsdIoDriver, SsdIoStats};
+use super::{RerankPrecision, SsdCacheConfig, SsdIoDriver, SsdIoStats};
 use crate::{Error, Result};
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
@@ -183,13 +183,17 @@ impl Drop for Page {
 }
 
 struct Pending {
+    #[cfg(feature = "ssd-trace")]
+    owner: Option<Arc<AtomicU64>>,
     done: AtomicBool,
     result: Mutex<Option<Result<Arc<Page>>>>,
     ready: Condvar,
 }
 impl Pending {
-    fn new() -> Self {
+    fn new(_page: u64) -> Self {
         Self {
+            #[cfg(feature = "ssd-trace")]
+            owner: super::trace::claim(_page),
             done: AtomicBool::new(false),
             result: Mutex::new(None),
             ready: Condvar::new(),
@@ -220,8 +224,14 @@ impl Pending {
     }
     fn wait(&self) -> Result<Arc<Page>> {
         let mut state = self.result.lock().unwrap();
+        #[cfg(feature = "ssd-trace")]
+        let wait = state.is_none().then(std::time::Instant::now);
         while state.is_none() {
             state = self.ready.wait(state).unwrap();
+        }
+        #[cfg(feature = "ssd-trace")]
+        if let Some(start) = wait {
+            super::trace::update(|trace| trace.page_wait_ns += start.elapsed().as_nanos() as u64);
         }
         state.as_ref().unwrap().clone()
     }
@@ -281,12 +291,16 @@ impl Shared {
         cache.entries.get(&page).map(|entry| match entry {
             Entry::Ready(data) => {
                 if !prefetch {
+                    #[cfg(feature = "ssd-trace")]
+                    super::trace::update(|trace| trace.ready_hits += 1);
                     self.counters.cache_hits.fetch_add(1, Ordering::Relaxed);
                 }
                 Entry::Ready(Arc::clone(data))
             }
             Entry::Loading(pending) => {
                 if !prefetch {
+                    #[cfg(feature = "ssd-trace")]
+                    super::trace::joined(pending.owner.as_ref());
                     self.counters.pending_hits.fetch_add(1, Ordering::Relaxed);
                 }
                 Entry::Loading(Arc::clone(pending))
@@ -347,7 +361,7 @@ impl Shared {
         if !prefetch {
             self.counters.cache_misses.fetch_add(1, Ordering::Relaxed);
         }
-        let pending = Arc::new(Pending::new());
+        let pending = Arc::new(Pending::new(page));
         self.caches[page as usize % SHARDS]
             .write()
             .unwrap()
@@ -469,6 +483,10 @@ impl Shared {
     }
 
     fn complete(&self, task: Task, result: Result<Arc<Page>>) {
+        #[cfg(feature = "ssd-trace")]
+        if let (Some(owner), Ok(page)) = (&task.result.owner, &result) {
+            owner.fetch_add(page.valid as u64, Ordering::Relaxed);
+        }
         {
             let mut cache = self.caches[task.page as usize % SHARDS].write().unwrap();
             cache.entries.remove(&task.page);
@@ -634,13 +652,22 @@ impl DirectReader {
         source: &File,
         offset: usize,
         length: usize,
+        precision: RerankPrecision,
         config: SsdCacheConfig,
     ) -> Result<Self> {
         config.validate()?;
         let file = open_direct(source)?;
-        Self::from_file(file, offset, length, config)
+        Self::from_file(file, offset, length, precision, config)
     }
-    fn from_file(file: File, offset: usize, length: usize, config: SsdCacheConfig) -> Result<Self> {
+    fn from_file(
+        file: File,
+        offset: usize,
+        length: usize,
+        precision: RerankPrecision,
+        config: SsdCacheConfig,
+    ) -> Result<Self> {
+        #[cfg(not(target_os = "linux"))]
+        let _ = precision;
         config.validate()?;
         let file_len =
             usize::try_from(file.metadata()?.len()).map_err(|_| Error::CapacityExceeded)?;
@@ -696,7 +723,7 @@ impl DirectReader {
                     std::thread::Builder::new()
                         .name("SSD异步调度".into())
                         .spawn(move || {
-                            let ring = match uring::Ring::new(&shared) {
+                            let ring = match uring::Ring::new(&shared, precision) {
                                 Ok(ring) => ring,
                                 Err(error) => {
                                     let _ = sender.send(Err(error));
@@ -777,6 +804,8 @@ impl DirectReader {
     fn batch_state_from_entry(page: u64, entry: &Entry, pin_cached: bool) -> BatchPageState {
         match entry {
             Entry::Ready(data) => {
+                #[cfg(feature = "ssd-trace")]
+                super::trace::update(|trace| trace.ready_hits += 1);
                 if pin_cached {
                     BatchPageState::Ready(Arc::clone(data), false)
                 } else {
@@ -784,6 +813,8 @@ impl DirectReader {
                 }
             }
             Entry::Loading(pending) => {
+                #[cfg(feature = "ssd-trace")]
+                super::trace::joined(pending.owner.as_ref());
                 if pin_cached {
                     BatchPageState::Loading(Arc::clone(pending))
                 } else {
@@ -1049,7 +1080,7 @@ impl DirectReader {
                                 if avail > 0 {
                                     avail -= 1;
                                     pushed += 1;
-                                    let pending = Arc::new(Pending::new());
+                                    let pending = Arc::new(Pending::new(page));
                                     guard
                                         .entries
                                         .insert(page, Entry::Loading(Arc::clone(&pending)));
@@ -1635,6 +1666,7 @@ mod tests {
             file.as_file(),
             offset,
             length,
+            RerankPrecision::Fp32,
             SsdCacheConfig {
                 cache_bytes: 16 * PAGE,
                 inflight_bytes: 4 * PAGE,
@@ -1672,6 +1704,7 @@ mod tests {
             file.as_file().try_clone().unwrap(),
             123,
             bytes.len() - 123,
+            RerankPrecision::Fp32,
             config,
         )
         .unwrap();
@@ -1713,6 +1746,7 @@ mod tests {
             file.as_file().try_clone().unwrap(),
             0,
             bytes.len(),
+            RerankPrecision::Fp32,
             SsdCacheConfig {
                 cache_bytes: 0,
                 inflight_bytes: PAGE,
@@ -1757,6 +1791,7 @@ mod tests {
             file,
             0,
             PAGE,
+            RerankPrecision::Fp32,
             SsdCacheConfig {
                 cache_bytes: 0,
                 inflight_bytes: PAGE,
@@ -1796,6 +1831,7 @@ mod tests {
             file.as_file().try_clone().unwrap(),
             0,
             bytes.len(),
+            RerankPrecision::Fp32,
             SsdCacheConfig {
                 cache_bytes: 16 * PAGE,
                 inflight_bytes: PAGE,

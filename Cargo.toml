@@ -13,6 +13,8 @@ categories = ["algorithms", "data-structures"]
 default = []
 # 表示对照、运行策略切换与计时外诊断。
 research = []
+# 逐查询归因与缺页轨迹仅在专用测量构建中启用。
+ssd-trace = ["research"]
 
 [dependencies]
 bytemuck = { version = "1.25", features = ["derive"] }

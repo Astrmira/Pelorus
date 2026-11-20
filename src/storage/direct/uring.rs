@@ -60,6 +60,7 @@ unsafe extern "C" {
         length: u32,
         offset: u64,
     ) -> i32;
+    fn qv_ring_enable_coalescing(ring: *mut c_void) -> i32;
     fn qv_ring_submit(ring: *mut c_void) -> i32;
     fn qv_ring_reap(ring: *mut c_void, events: *mut Event, capacity: u32) -> i32;
     fn qv_ring_stats(ring: *mut c_void, stats: *mut Stats);
@@ -90,7 +91,7 @@ pub(super) struct Ring {
 }
 
 impl Ring {
-    pub(super) fn new(shared: &Shared) -> Result<Self> {
+    pub(super) fn new(shared: &Shared, precision: RerankPrecision) -> Result<Self> {
         let mut raw = std::ptr::null_mut();
         let mut info = Info::default();
         // SAFETY：匿名slab地址及长度固定且页对齐。当前调度线程创建并独占ring，注册持续到排空关闭。
@@ -121,10 +122,18 @@ impl Ring {
             .counters
             .ring_capabilities
             .store(u64::from(info.capabilities), Ordering::Relaxed);
-        Ok(Self {
+        let ring = Self {
             raw,
             pool: Arc::clone(&shared.pool),
-        })
+        };
+        if precision == RerankPrecision::Fp32 {
+            // SAFETY：调度线程独占新建的环，首次提交前分配组描述符，失败时由 Drop 释放环。
+            checked(
+                unsafe { qv_ring_enable_coalescing(ring.raw.as_ptr()) },
+                "启用相邻页读取",
+            )?;
+        }
+        Ok(ring)
     }
 
     fn push(&mut self, token: u64, lease: &mut Lease, offset: u64) -> Result<()> {
@@ -151,10 +160,16 @@ impl Ring {
         Ok(())
     }
 
-    fn reap(&mut self, events: &mut [Event; DEPTH]) -> Result<usize> {
+    fn reap(&mut self, events: &mut [Event]) -> Result<usize> {
         // SAFETY：事件数组长度和C布局一致，桥接在CQE可见后复制并推进CQ。
         Ok(checked(
-            unsafe { qv_ring_reap(self.raw.as_ptr(), events.as_mut_ptr(), DEPTH as u32) },
+            unsafe {
+                qv_ring_reap(
+                    self.raw.as_ptr(),
+                    events.as_mut_ptr(),
+                    events.len().min(DEPTH) as u32,
+                )
+            },
             "批量回收",
         )? as usize)
     }
@@ -173,6 +188,7 @@ impl Ring {
         }
         let c = &shared.counters;
         for (target, value) in [
+            (&c.read_calls, stats.submitted),
             (&c.uring_submitted, stats.submitted),
             (&c.uring_completed, stats.completed),
             (&c.uring_max_inflight, stats.max_inflight),
@@ -256,19 +272,28 @@ impl Shared {
                     }
                     break;
                 };
-                let setup = task.page.checked_mul(PAGE as u64).zip(token.checked_add(1));
-                let Some((offset, next_token)) = setup else {
-                    self.pool.put(lease);
-                    self.complete(task, Err(Error::CapacityExceeded));
-                    return Err(Error::CapacityExceeded);
+                let queued = task
+                    .page
+                    .checked_mul(PAGE as u64)
+                    .zip(token.checked_add(1))
+                    .ok_or(Error::CapacityExceeded)
+                    .and_then(|(offset, next)| {
+                        ring.push(next, &mut lease, offset)?;
+                        Ok(next)
+                    });
+                let next = match queued {
+                    Ok(next) => next,
+                    Err(error) => {
+                        self.pool.put(lease);
+                        self.complete(task, Err(error.clone()));
+                        // 整波已从共享队列取出；未交给环的等待者也必须唤醒并归还在途额度。
+                        for remaining in drained.drain(..) {
+                            self.complete(remaining, Err(error.clone()));
+                        }
+                        return Err(error);
+                    }
                 };
-                token = next_token;
-                if let Err(error) = ring.push(token, &mut lease, offset) {
-                    self.pool.put(lease);
-                    self.complete(task, Err(error.clone()));
-                    return Err(error);
-                }
-                self.counters.read_calls.fetch_add(1, Ordering::Relaxed);
+                token = next;
                 active.insert(token, Operation { task, lease });
             }
             ring.submit()?;
@@ -362,9 +387,15 @@ mod tests {
     use std::io::Write;
 
     #[test]
-    fn 固定缓冲一次提交十五页并逐页核对真实完成数据() {
+    fn 相邻页按编码提交并核对跨组空洞分散缓冲和文件尾() {
+        for (precision, submissions) in [(RerankPrecision::Fp32, 3), (RerankPrecision::Sq8, 15)] {
+            核对跨组页读取(precision, submissions);
+        }
+    }
+
+    fn 核对跨组页读取(precision: RerankPrecision, submissions: u64) {
         let mut file = tempfile::NamedTempFile::new().unwrap();
-        let bytes = (0..15 * PAGE)
+        let bytes = (0..16 * PAGE + 37)
             .map(|i| (i * 73 % 251) as u8)
             .collect::<Vec<_>>();
         file.write_all(&bytes).unwrap();
@@ -374,6 +405,7 @@ mod tests {
             file.as_file(),
             0,
             bytes.len(),
+            RerankPrecision::Fp32,
             SsdCacheConfig {
                 cache_bytes: 0,
                 inflight_bytes: 15 * PAGE,
@@ -383,42 +415,78 @@ mod tests {
             },
         )
         .unwrap();
-        let mut ring = Ring::new(&reader.shared).unwrap();
+        let mut ring = Ring::new(&reader.shared, precision).unwrap();
         let mut leases = Vec::new();
-        for page in 0..15 {
+        let pages: Vec<_> = (0..9).chain((11..=16).rev()).collect();
+        for (slot, page) in pages.iter().enumerate() {
             let mut lease = reader.shared.pool.try_take().unwrap();
-            ring.push(page as u64 + 1, &mut lease, (page * PAGE) as u64)
+            ring.push(slot as u64 + 1, &mut lease, (page * PAGE) as u64)
                 .unwrap();
             leases.push(Some(lease));
         }
         ring.submit().unwrap();
         let mut completed = 0;
-        let mut events = [Event::default(); DEPTH];
+        // 每次最多交付两页，覆盖同一物理完成需要多次取出的情况。
+        let mut events = [Event::default(); 2];
         while completed < 15 {
             let count = ring.reap(&mut events).unwrap();
             for event in &events[..count] {
                 assert_eq!(event.flags, 0);
-                assert_eq!(event.result, PAGE as i32);
-                let page = event.token as usize - 1;
-                let lease = leases[page].take().expect("每页只能完成一次");
+                let slot = event.token as usize - 1;
+                let start = pages[slot] * PAGE;
+                let expected = &bytes[start..(start + PAGE).min(bytes.len())];
+                assert_eq!(event.result, expected.len() as i32);
+                let lease = leases[slot].take().expect("每页只能完成一次");
                 // SAFETY：对应CQE已到达，租约仍独占有效页，读取完成数据后才归还。
                 let actual = unsafe {
                     std::slice::from_raw_parts(
                         reader.shared.pool.address.as_ptr().add(lease.index * PAGE),
-                        PAGE,
+                        expected.len(),
                     )
                 };
-                assert_eq!(actual, &bytes[page * PAGE..(page + 1) * PAGE]);
+                assert_eq!(actual, expected);
                 reader.shared.pool.put(lease);
                 completed += 1;
             }
         }
         ring.publish(&reader.shared);
-        assert_eq!(reader.stats().uring_submitted, 15);
-        assert_eq!(reader.stats().uring_completed, 15);
+        assert_eq!(reader.stats().read_calls, submissions);
+        assert_eq!(reader.stats().uring_submitted, submissions);
+        assert_eq!(reader.stats().uring_completed, submissions);
         assert_eq!(reader.stats().uring_submit_batches, 1);
-        assert_eq!(reader.stats().uring_max_inflight, 15);
+        assert_eq!(reader.stats().uring_max_inflight, submissions);
         assert_eq!(reader.stats().pool_live_bytes, 0);
+    }
+
+    #[test]
+    fn 合并读遇到截断时唤醒尾页等待者并排空全部租约() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        file.as_file().set_len((4 * PAGE) as u64).unwrap();
+        let reader = DirectReader::open(
+            file.as_file(),
+            0,
+            4 * PAGE,
+            RerankPrecision::Fp32,
+            SsdCacheConfig {
+                cache_bytes: 16 * PAGE,
+                inflight_bytes: 4 * PAGE,
+                prefetch_window: 4,
+                ..SsdCacheConfig::default()
+            },
+        )
+        .unwrap();
+        file.as_file().set_len((PAGE + 37) as u64).unwrap();
+        let mut scratch = DirectScratch::default();
+        reader.prepare_rerank_batch(&[0, 1, 2, 3], PAGE, &mut scratch);
+        assert!(reader.record_prepared(3, 3, PAGE, &mut scratch).is_err());
+        drop(scratch);
+        reader.clear();
+        let stats = reader.stats();
+        assert_eq!(stats.read_calls, 1);
+        assert_eq!(stats.uring_completed, 1);
+        assert_eq!(stats.read_bytes, (PAGE + 37) as u64);
+        assert_eq!(stats.read_errors, 1);
+        assert_eq!(stats.pool_live_bytes, 0);
     }
 
     #[test]
@@ -434,6 +502,7 @@ mod tests {
             file.as_file(),
             0,
             bytes.len(),
+            RerankPrecision::Fp32,
             SsdCacheConfig {
                 cache_bytes: 0,
                 inflight_bytes: PAGE,
@@ -486,6 +555,7 @@ mod tests {
             file,
             0,
             8 * PAGE,
+            RerankPrecision::Fp32,
             SsdCacheConfig {
                 cache_bytes: 0,
                 inflight_bytes: 16 * PAGE,
@@ -527,6 +597,7 @@ mod tests {
             file.as_file(),
             0,
             bytes.len(),
+            RerankPrecision::Fp32,
             SsdCacheConfig {
                 cache_bytes: 0,
                 inflight_bytes: PAGE,
@@ -565,6 +636,7 @@ mod tests {
             file.as_file().try_clone().unwrap(),
             0,
             bytes.len(),
+            RerankPrecision::Fp32,
             SsdCacheConfig {
                 cache_bytes: 16 * PAGE,
                 inflight_bytes: PAGE,

@@ -12,6 +12,9 @@ pub use crate::graph::{
 };
 pub use crate::quantization::set_asym_sm_lut_override;
 
+#[cfg(feature = "ssd-trace")]
+pub use crate::storage::trace::{SsdRequestTrace, trace_ssd_io};
+
 /// 变曲率流形实验原型入口（仅在启用 `research` feature 时编译，聚焦 Tier 2 乘积流形与 Tier 3 径向翘曲乘积流形探索，暂不转正）。
 pub mod var_curvature {
     pub use crate::var_curvature::{

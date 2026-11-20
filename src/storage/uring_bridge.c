@@ -28,6 +28,22 @@ struct qv_event {
 _Static_assert(sizeof(struct qv_info) == 40, "信息记录布局不匹配");
 _Static_assert(sizeof(struct qv_stats) == 64, "统计记录布局不匹配");
 _Static_assert(sizeof(struct qv_event) == 16, "完成记录布局不匹配");
+
+enum { page_bytes = 4096, ring_depth = 256, max_group_pages = 8 };
+struct page_request {
+    uint64_t token, offset;
+    void *buffer;
+};
+struct read_group {
+    struct iovec buffers[max_group_pages];
+    uint64_t tokens[max_group_pages];
+    unsigned count, delivered;
+};
+struct page_batch {
+    struct page_request staged[ring_depth];
+    struct read_group groups[ring_depth];
+    unsigned count, cursor;
+};
 struct qv_ring {
     int fd, files, buffers;
     struct io_uring_params p;
@@ -40,6 +56,7 @@ struct qv_ring {
     uintptr_t buffer_start;
     size_t buffer_bytes;
     unsigned active;
+    struct page_batch *batch;
     struct qv_info info;
     struct qv_stats stats;
 };
@@ -106,6 +123,9 @@ int qv_ring_quiesce(struct qv_ring *r) {
         }
         release(r->cq_head, head);
     }
+    /* 未提交的页不再进入内核；已提交的组全部排空后才可复用其 iovec。 */
+    if (r->batch)
+        memset(r->batch, 0, sizeof(*r->batch));
     return first;
 }
 int qv_ring_close(struct qv_ring *r) {
@@ -126,6 +146,7 @@ int qv_ring_close(struct qv_ring *r) {
         munmap(r->sq_map, r->sq_bytes);
     if (r->fd >= 0 && close(r->fd) != 0 && !first)
         first = -errno;
+    free(r->batch);
     free(r);
     return first;
 }
@@ -233,22 +254,25 @@ failed:
     qv_ring_close(r);
     return error;
 }
-int qv_ring_push(struct qv_ring *r, uint64_t token, void *buffer, unsigned length,
-                 uint64_t offset) {
-    uintptr_t address = (uintptr_t)buffer;
-    if (address < r->buffer_start || length > r->buffer_bytes ||
-        address - r->buffer_start > r->buffer_bytes - length)
-        return -EFAULT;
+int qv_ring_enable_coalescing(struct qv_ring *r) {
+    if (!r->batch)
+        r->batch = calloc(1, sizeof(*r->batch));
+    return r->batch ? 0 : -ENOMEM;
+}
+
+/* 连续缓冲为 READ_FIXED 的字节范围；分散缓冲为 READV 的 iovec 数组。 */
+static int queue_read(struct qv_ring *r, uint64_t token, uint64_t offset,
+                      void *address, unsigned length, unsigned opcode) {
     unsigned tail = acquire(r->sq_tail), head = acquire(r->sq_head);
     if (tail - head >= r->p.sq_entries || r->active >= 256)
         return -EBUSY;
     unsigned index = tail & *r->sq_mask;
     struct io_uring_sqe *sqe = &r->sqes[index];
     memset(sqe, 0, sizeof(*sqe));
-    sqe->opcode = IORING_OP_READ_FIXED;
+    sqe->opcode = opcode;
     sqe->flags = IOSQE_FIXED_FILE;
     sqe->fd = 0;
-    sqe->addr = address;
+    sqe->addr = (uintptr_t)address;
     sqe->len = length;
     sqe->off = offset;
     sqe->buf_index = 0;
@@ -260,7 +284,71 @@ int qv_ring_push(struct qv_ring *r, uint64_t token, void *buffer, unsigned lengt
         r->stats.max_inflight = r->active;
     return 0;
 }
+int qv_ring_push(struct qv_ring *r, uint64_t token, void *buffer, unsigned length,
+                 uint64_t offset) {
+    uintptr_t address = (uintptr_t)buffer;
+    if (address < r->buffer_start || length > r->buffer_bytes ||
+        address - r->buffer_start > r->buffer_bytes - length)
+        return -EFAULT;
+    if (!r->batch)
+        return queue_read(r, token, offset, buffer, length, IORING_OP_READ_FIXED);
+    if (length != page_bytes || offset % page_bytes != 0)
+        return -EINVAL;
+    if (r->batch->count == ring_depth)
+        return -EBUSY;
+    r->batch->staged[r->batch->count++] = (struct page_request){token, offset, buffer};
+    return 0;
+}
+
+static int compare_offsets(const void *left, const void *right) {
+    const struct page_request *a = left, *b = right;
+    return (a->offset > b->offset) - (a->offset < b->offset);
+}
+
+static int queue_page_groups(struct qv_ring *r) {
+    struct page_batch *batch = r->batch;
+    qsort(batch->staged, batch->count, sizeof(batch->staged[0]), compare_offsets);
+    for (unsigned i = 0; i < batch->count;) {
+        const struct page_request *first = &batch->staged[i];
+        unsigned count = 1;
+        while (count < max_group_pages && i + count < batch->count &&
+               first[count].offset - first->offset == count * page_bytes)
+            count++;
+
+        /* Rust 限制同时持有的页租约不超过环深度，每个未完成的组至少占一页。 */
+        unsigned slot = batch->cursor;
+        for (unsigned tries = 0; batch->groups[slot].count; tries++) {
+            if (tries + 1 == ring_depth)
+                return -EBUSY;
+            slot = (slot + 1) % ring_depth;
+        }
+        batch->cursor = (slot + 1) % ring_depth;
+        struct read_group *group = &batch->groups[slot];
+        int contiguous = 1;
+        for (unsigned j = 0; j < count; j++) {
+            group->tokens[j] = first[j].token;
+            group->buffers[j] = (struct iovec){first[j].buffer, page_bytes};
+            if ((uintptr_t)first[j].buffer != (uintptr_t)first->buffer + j * page_bytes)
+                contiguous = 0;
+        }
+        int result = contiguous
+            ? queue_read(r, slot, first->offset, first->buffer, count * page_bytes, IORING_OP_READ_FIXED)
+            : queue_read(r, slot, first->offset, group->buffers, count, IORING_OP_READV);
+        if (result < 0)
+            return result;
+        group->count = count;
+        group->delivered = 0;
+        i += count;
+    }
+    batch->count = 0;
+    return 0;
+}
 int qv_ring_submit(struct qv_ring *r) {
+    if (r->batch && r->batch->count) {
+        int result = queue_page_groups(r);
+        if (result < 0)
+            return result;
+    }
     unsigned pending = acquire(r->sq_tail) - acquire(r->sq_head);
     if (pending)
         r->stats.submit_batches++;
@@ -285,21 +373,49 @@ int qv_ring_reap(struct qv_ring *r, struct qv_event *events, unsigned capacity) 
             return result;
         tail = acquire(r->cq_tail);
     }
-    unsigned count = 0;
+    unsigned count = 0, physical = 0;
     while (head != tail && count < capacity) {
         struct io_uring_cqe c = r->cqes[head & *r->cq_mask];
-        if (!r->active)
+        if (!r->active) {
+            release(r->cq_head, head);
             return -EPROTO;
-        events[count++] = (struct qv_event){c.user_data, c.res, c.flags};
+        }
+        if (r->batch) {
+            if (c.user_data >= ring_depth) {
+                release(r->cq_head, head);
+                return -EPROTO;
+            }
+            struct read_group *group = &r->batch->groups[c.user_data];
+            if (!group->count || c.res > (int)(group->count * page_bytes)) {
+                release(r->cq_head, head);
+                return -EPROTO;
+            }
+            while (group->delivered < group->count && count < capacity) {
+                unsigned page = group->delivered++;
+                int bytes = c.res;
+                if (bytes >= 0) {
+                    bytes -= (int)(page * page_bytes);
+                    if (bytes < 0) bytes = 0;
+                    if (bytes > page_bytes) bytes = page_bytes;
+                }
+                events[count++] = (struct qv_event){group->tokens[page], bytes, c.flags};
+            }
+            if (group->delivered < group->count)
+                break;
+            group->count = 0;
+        } else {
+            events[count++] = (struct qv_event){c.user_data, c.res, c.flags};
+        }
+        physical++;
         head++;
         r->active--;
         r->stats.completed++;
     }
     release(r->cq_head, head);
-    if (count) {
+    if (physical) {
         r->stats.completion_batches++;
-        if (count > r->stats.completion_batch_max)
-            r->stats.completion_batch_max = count;
+        if (physical > r->stats.completion_batch_max)
+            r->stats.completion_batch_max = physical;
     }
     return (int)count;
 }

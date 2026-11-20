@@ -6,6 +6,8 @@ mod codec;
 mod scoring;
 pub(crate) use codec::{ColdStore, RerankScratch};
 mod direct;
+#[cfg(feature = "ssd-trace")]
+pub(crate) mod trace;
 pub(crate) use direct::{DirectReader, DirectScratch};
 pub(crate) mod binary;
 

@@ -176,7 +176,7 @@ fn main() -> quiver_ann::Result<()> {
 
 可执行示例使用 `cargo run --release --example ssd` 运行。配置、增量写入、文件生命周期和统计口径见[存储指南](docs/storage.md)。
 
-Linux 下可用 `Index::open_ssd(path, SsdCacheConfig::default())` 启用 `O_DIRECT` 重排读取、默认 128 MiB 共享页缓存和 32 MiB 在途缓冲预算。默认 io_uring 驱动由单调度线程管理深度 256 的固定文件、固定缓冲队列，合并并发同页读取并批量提交、回收异步预读。整个缓存与在途池注册为锁定内存，需有相应的 `RLIMIT_MEMLOCK`。`ssd_io_stats()` 报告缓存命中、物理 I/O、注册容量、批次、在途峰值及内核 IOWQ 注册能力。将 `cache_bytes` 设为 `512 * 1024 * 1024` 即可使用更大的缓存池。
+Linux 下可用 `Index::open_ssd(path, SsdCacheConfig::default())` 启用 `O_DIRECT` 重排读取、默认 128 MiB 共享页缓存和 32 MiB 在途缓冲预算。默认 io_uring 驱动由单调度线程管理深度 256 的固定文件、固定缓冲队列，合并并发同页读取并批量提交、回收异步预读。FP32 冷重排还会合并同一提交批次内最多 8 个连续缺页；其他精度逐页提交。系统读取次数按物理请求计。整个缓存与在途池注册为锁定内存，需有相应的 `RLIMIT_MEMLOCK`。`ssd_io_stats()` 报告缓存命中、物理 I/O、注册容量、批次、在途峰值及内核 IOWQ 注册能力。将 `cache_bytes` 设为 `512 * 1024 * 1024` 即可使用更大的缓存池。
 
 ---
 

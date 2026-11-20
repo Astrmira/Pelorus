@@ -149,6 +149,7 @@ pub struct SsdIoStats {
     pub ring_mapping_bytes: u64,
     pub io_wq_affinity_registered: bool,
     pub io_wq_workers_registered: bool,
+    /// 系统读取次数。io_uring 按已提交的物理 SQE 计数，一个 SQE 可读取多个连续页。
     pub read_calls: u64,
     pub read_bytes: u64,
     pub read_errors: u64,
