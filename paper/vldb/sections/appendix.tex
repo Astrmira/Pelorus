@@ -357,12 +357,12 @@ For an axial scalar $\tilde\alpha=\alpha+\delta\alpha$ clipped to $[-1,1]$, defi
  =\frac{|2\alpha\delta\alpha+(\delta\alpha)^2|}{\tilde\beta+\beta}
  \label{eq:axial_rounding}
 \end{equation}
-whenever the denominator is positive. The cone scorer clips the square-root argument at zero and uses the axial product for a degenerate residual. Final reranking evaluates the original FP32 coordinates with FP64 accumulation.
+whenever the denominator is positive. The cone scorer clips the square-root argument at zero and uses the axial product for a degenerate residual. In the FP32 reference path, final reranking evaluates the stored FP32 coordinates with FP64 accumulation. Table~\ref{tab:depth_precision} measures the earlier rounding step against the published FP64 coordinates.
 
 \subsection{Off-Axis CJ-Gate Jacobian and $5.49\times$ Underestimation Counterexample}
 From $P_{\mathbb{B}}(q, v) = R(r_q, r_v) + 2 r_q r_v f_q f_v(1 - \gamma_{qv})$ and~\eqref{eq:cone_estimator}, only $\hat{\gamma}_{\mathrm{asym}}(\tilde{r}_{q,c}, \tilde{r}_v)$ carries quantization uncertainty $\sigma_0 = \sqrt{\kappa_{\mathrm{SM}}/D}$, multiplied by $\frac{\partial \hat{\gamma}_{\mathrm{cone}}}{\partial \hat{\gamma}_{\mathrm{asym}}} = \beta_{q,c}\beta_v$ and $\bigl|\frac{\partial P_{\mathbb{B}}}{\partial \gamma_{qv}}\bigr| = 2 r_q r_v f_q f_v$, proving~\eqref{eq:cj_sigma}.
-If an implementation approximates $q$ as lying at the cluster center ($\beta_{q,c} \approx \beta_v$), replacing $\beta_{q,c}\beta_v$ by $\beta_v^2$ mis-scales $\sigma_P(q, v)$ by $\frac{\beta_{q,c}}{\beta_v}$: for a boundary-cone query at $\alpha_{q,c} = 0.84$ ($\beta_{q,c} = \sqrt{1 - 0.84^2} \approx 0.5426$) evaluating a near-axis candidate at $\alpha_v = 0.9951$ ($\beta_v = \sqrt{1 - 0.9951^2} \approx 0.0989$), $\frac{\beta_{q,c}}{\beta_v} = \frac{0.5426}{0.0989} \approx 5.49$, underestimating true plateau uncertainty by $5.49\times$.
-Using exact $\tilde{\beta}(q, v) = \beta_{q,c}\beta_v$ eliminates this underestimation across all query angles.
+If the query and candidate share the same angular offset from the cone axis, $\beta_v^2$ equals $\beta_{q,c}\beta_v$. For an off-axis query with $\alpha_{q,c}=0.84$ and a near-axis candidate with $\alpha_v=0.9951$, the true multiplier is larger by $\beta_{q,c}/\beta_v=\sqrt{1-0.84^2}/\sqrt{1-0.9951^2}\approx5.49$.
+Using $\tilde{\beta}(q,v)=\beta_{q,c}\beta_v$ accounts for the angular offset of each operand.
 
 \subsection{Binomial Variance Propagation for \texttt{SymSketch256}}
 Let $H \in \{0, \dots, B_s\}$ ($B_s = 256$) be the Hamming distance over $B_s$ sampled coordinates with disagreement probability $p \in (0, 1)$, so $\E[H/B_s] = p$ and $\Var(H/B_s) = \frac{p(1 - p)}{B_s}$.
@@ -408,12 +408,43 @@ Hence $G_k(q) \cap (F_B(q) \setminus R_k(q)) = \emptyset$ and $\mathcal{L}_{\mat
     Global-SM (No Rescue) & 0 & 21.9\,s & 34.22\% & \textbf{2,071} \\
     + \textsc{CJ-Gate} Only & 0 & 21.9\,s & 50.59\% & 1,884 \\
     + Var.-Stab.\ \texttt{SymSketch256} & 0 & 21.5\,s & 34.22\% & 1,960 \\
-    + \texttt{ResidualConeDict} + \textsc{CJ-Gate} & 256 & 25.7\,s & 99.37\% & 1,958 \\
-    \textbf{\rquiver{}} & \textbf{256} & 25.3\,s & \textbf{99.39\%} & 1,840 \\
+    + \texttt{ResidualConeDict} + \textsc{CJ-Gate} & 256 & 25.7\,s & 99.365\% & 1,958 \\
+    \textbf{\rquiver{}} & \textbf{256} & 25.3\,s & \textbf{99.385\%} & 1,840 \\
     \bottomrule
   \end{tabularx}
 \end{table}
 
 Table~\ref{tab:app_stage_audit} reports the controlled fixed-budget ablation ($L=256, B=128$, independent Zen~4 graph builds per configuration) on {Clustered-Narrow}:
-on the diagnostic subset, {Global-SM} traversal without tangent-cone rescue or adaptive gating visits $93.9\%$ of true neighbors ($\mathcal{L}_{\mathrm{reach}} = 6.1\%$) yet loses $44.6\%$ inside the bounded $L$-beam ($\mathcal{L}_{\mathrm{beam}}$) and $16.3\%$ at pool gating ($\mathcal{L}_{\mathrm{gate}}$, $33.0\%$ subset / $34.22\%$ full Recall@10).
+on a 128-query trace, {Global-SM} visited $1{,}202$ of the $1{,}280$ true neighbors. Beam truncation removed 571 and gating removed another 209, leaving 422 for exact reranking ($32.97\%$ trace recall, $34.22\%$ over all $2{,}000$ queries).
 The full-query measurements raise recall from $34.22\%$ to $50.59\%$ with \textsc{CJ-Gate} alone ($1{,}884$\,QPS). Residual encoding with \textsc{CJ-Gate} reaches $99.365\%$ ($1{,}958$\,QPS), and full \rquiver{} reaches $99.385\%$ ($1{,}840$\,QPS 1T and $38{,}876$\,QPS 24T). At $L=384,B=128$, full-method recall is $99.80\%$. Residual encoding reuses the existing per-vertex bitplanes and header slots.
+
+\section{Page Allocation and Cold-Store Measurements}
+\label{app:storage_measurements}
+
+\paragraph{Page allocation.}
+Table~\ref{tab:layout_sweep} holds topology, query ordering, search settings and vertex encoding fixed within each power-of-two/compact pair. The 384D probe keeps a coordinate subset from MERU and restores each point's radius. The 1024D probe concatenates a MERU direction with a signed permutation of itself and rescales it isometrically. Each probe uses $65{,}536$ base vectors and 512 queries with recomputed FP64 truth. MERU and Cohere use their full million-vector databases. Shared FP32 is an additional representation control on 20D WordNet-Hazy. In that row zero page bytes means that navigation reads the existing vectors. Adjacency and query buffers still contribute to process RSS.
+
+\input{tables/layout_sweep}
+
+\paragraph{Cold reranking.}
+Table~\ref{tab:ssd_backends} compares RAM and two SSD cache sizes with the same in-memory MERU navigation graph. The five encodings were measured with commit \texttt{3d18859} and batched direct reads. Each encoding/backend pair received 171 single-thread tuning conditions on the same 2,000 validation queries. We took the union of nondominated configurations and the two fastest qualifying configurations at each recall target. This gave 43 distinct search configurations. All were measured at 1, 2, 4, 8, 16 and 24 threads, giving $43\times5\times3\times6=3{,}870$ test conditions on 10,000 queries each. Each condition had 200 warmups followed by one timed pass.
+
+For each encoding we selected the highest standard recall threshold attained in all six displayed backend/thread combinations, then used the fastest qualifying 1T RAM configuration at all six points. This fixes the results for the backend comparison. Table~\ref{tab:meru_ssd} additionally pairs SQ8 and SQ4 at the same search budget to isolate the precision change. We verified topology CRC before and after recoding and checked the returned ID and score fingerprints across all backends and thread counts at fixed encoding and search settings. The per-query hits were checked against ground truth. The SSD read and queue error counters stayed at zero, and cache and in-flight allocations stayed within their configured limits. RAM contributes no SSD reads. The SSD columns measure read calls and bytes issued by the backend during the timed pass.
+
+\input{tables/ssd_backends}
+
+\section{Graph Search and Exact Scanning on HyperE WordNet}
+\label{app:wordnet_search}
+
+Figure~\ref{fig:deep_recall} follows both variants beyond the initial $L=256$ point. We keep \textsc{CJ-Gate} enabled, sweep $L$ from 128 to $16{,}384$ and include full-beam reranking. Table~\ref{tab:deep_budget} gives the fastest measured throughput meeting each threshold on the first build. At the $90\%$ target the dictionary halves the beam and cuts actual vector reads from $5{,}374$ to $2{,}777$. At $95\%$ both variants need the widest beam measured. The dictionary still reduces reads by $42\%$, but the larger traversal leaves throughput close to $100$\,QPS for both.
+
+At this dimension the entire FP32 coordinate array occupies $2.93$\,MB. We compared a contiguous exact scan with the six frozen graph settings using one query thread and the same 256 queries. The scan accumulates coordinate differences in FP64 and uses a precomputed inverse boundary factor per point. On the first query order it returns all stored-coordinate nearest neighbors at $1{,}595$\,QPS and $0.67$\,ms p99. At the $95\%$ target, the independent remeasurement of the frozen settings on a rebuilt graph (seed 12345) gives $87$\,QPS and $14.23$\,ms with the dictionary ($95.74\%$ recall), and $85$\,QPS and $14.05$\,ms without ($96.41\%$). Even the fastest of the six graph settings serves $840$\,QPS at $83.95\%$ recall. On this small, low-dimensional corpus, sequential scanning is the faster high-recall search.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{deep_recall.pdf}
+  \caption{Deep native HyperE WordNet. Single-build 1T throughput against actual Recall@10 with the residual dictionary on or off. Both configurations use adaptive rerank admission.}
+  \label{fig:deep_recall}
+\end{figure}
+
+\input{tables/deep_budget}

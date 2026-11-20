@@ -1,0 +1,26 @@
+\begin{table}[t]
+ \centering
+ \caption{Pruning policies on Cohere-1M with the Core query engine. Fixed-budget Recall@10 uses $(L,B)=(192,64)$. Peak recall and the fastest 1T point reaching $99\%$ use the same 16 budgets for each policy ($L\le 2{,}048$). The final two rows are the first pair from an independent three-seed rebuild.}
+ \label{tab:cohere_channels}
+ \footnotesize
+ \setlength{\tabcolsep}{3pt}
+ \begin{tabular}{@{}lrrrrr@{}}
+ \toprule
+ & \multicolumn{2}{c}{Recall (\%)} & \multicolumn{3}{c}{$\ge 99\%$ Recall@10} \\
+ \cmidrule(lr){2-3}\cmidrule(lr){4-6}
+ Policy & Fixed & Peak & $L/B$ & QPS & p99 (ms)\\
+ \midrule
+All four channels & 99.00 & 99.70 & 192/64 & 1,957 & 0.58 \\
+Geodesic off & 99.41 & 99.91 & 192/64 & 1,874 & 0.63 \\
+Ring off & 97.09 & 98.74 & \missing & \missing & \missing \\
+Inward elevator off & 99.08 & 99.73 & 192/64 & 1,928 & 0.61 \\
+Outward elevator off & 99.00 & 99.65 & 208/64 & 1,972 & 0.58 \\
+Both elevators off & 99.23 & 99.71 & 192/64 & 1,925 & 0.59 \\
+Ring shield off & 98.99 & 99.69 & 200/64 & 1,896 & 0.62 \\
+Earlier two-pass & 97.55 & 99.44 & 1536/64 & 426 & 2.64 \\
+ \midrule
+QuadriPrune (paired) & 98.97 & 99.72 & 200/64 & 1,946 & 0.60 \\
+Angular quota (paired) & 98.93 & 99.87 & 208/64 & 1,721 & 0.68 \\
+ \bottomrule
+ \end{tabular}
+\end{table}

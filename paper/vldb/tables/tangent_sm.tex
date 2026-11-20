@@ -1,0 +1,23 @@
+\begin{table*}[t]
+  \centering
+  \caption{MERU-1M tangent-space and native 2-bit graphs on the independent test queries. Each method uses its first build.}
+  \label{tab:tangent_sm}
+  \small
+  \begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lrrrrrrrrrr@{}}
+    \toprule
+    & \multicolumn{5}{c}{1 thread} & \multicolumn{5}{c}{24 threads} \\
+    \cmidrule(lr){2-6}\cmidrule(l){7-11}
+    Method & $(L,B)$ & Recall@10 & QPS & p99 (ms) & RSS (MiB) & $(L,B)$ & Recall@10 & QPS & p99 (ms) & RSS (MiB) \\
+    \midrule
+    \multicolumn{11}{@{}l}{\emph{Fixed candidate and rerank budgets}} \\
+  Tangent 2-bit & $(128,128)$ & 97.837\% & 2,326 & 0.644 & 2,605 & $(128,128)$ & 97.837\% & 55,121 & 0.660 & 2,609 \\
+  \rquiver{} & $(128,128)$ & 99.248\% & 2,248 & 0.555 & 2,722 & $(128,128)$ & 99.248\% & 51,733 & 0.592 & 2,726 \\
+    \midrule
+    \multicolumn{11}{@{}l}{\emph{Validation-selected operating points}} \\
+  Tangent 2-bit & $(256,128)$ & 99.107\% & 1,510 & 0.989 & 2,609 & $(256,128)$ & 99.107\% & 35,813 & 0.993 & 2,605 \\
+  \rquiver{} & $(128,128)$ & 99.248\% & 2,311 & 0.548 & 2,725 & $(128,32)$ & 99.247\% & 50,848 & 0.599 & 2,722 \\
+    \bottomrule
+  \end{tabular*}
+  \par
+  {\footnotesize $B$ is the nominal rerank budget. When $B<L$, \textsc{CJ-Gate} can admit additional candidates in \rquiver{}. Rows are timed independently. RSS includes cold vectors.}
+\end{table*}

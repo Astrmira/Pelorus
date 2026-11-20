@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+  \centering
+  \caption{HyperE WordNet conversion by source depth. Outside counts include the sphere. Duplicates count additional in-ball rows lost to FP32 collisions. Overlap is top-10 agreement with exhaustive source FP64 truth on the common database (64 queries per depth bin).}
+  \label{tab:depth_precision}
+  \footnotesize
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular}{@{}lrrrrr@{}}
+  \toprule
+  Depth & Source & Outside & Duplicates & FP32 overlap & Depth + direction \\
+  \midrule
+  $[0,8)$ & 10571 & 0 & 0 & 99.69\% & 99.69\% \\
+  $[8,12)$ & 23800 & 0 & 0 & 98.12\% & 98.12\% \\
+  $[12,16)$ & 30496 & 0 & 0 & 98.28\% & 99.38\% \\
+  $[16,18)$ & 5973 & 1 & 1 & 92.50\% & 98.12\% \\
+  $[18,20)$ & 2559 & 430 & 0 & 86.56\% & 96.25\% \\
+  $[20,\infty)$ & 975 & 321 & 107 & 74.53\% & 86.41\% \\
+  \bottomrule
+  \end{tabular}
+\end{table}

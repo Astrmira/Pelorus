@@ -1,5 +1,42 @@
 {
   "说明": "四种合成分布的正式实测比较，使用已归档且指纹一致的完整配置点。各线程独立取达到阈值的最大QPS，单线程峰值单列。",
+  "等预算对照": {
+    "来源": "research/artifacts/experiments/cj_uniform_controls_20261118/consolidated_summary.json",
+    "组": [
+      "res_uniform_m32"
+    ],
+    "条件": "首图上 A、B_c、C 全开，各线程独立取最快达标点。",
+    "选点": [
+      {
+        "target": 0.9,
+        "threads": 1,
+        "condition": "u32_a1_e3072_b128_t1",
+        "recall": 0.92525,
+        "qps": 65.42778119958072
+      },
+      {
+        "target": 0.9,
+        "threads": 24,
+        "condition": "u32_a1_e4096_b128_t24",
+        "recall": 0.95285,
+        "qps": 1201.7577292189667
+      },
+      {
+        "target": 0.95,
+        "threads": 1,
+        "condition": "u32_a1_e4096_b128_t1",
+        "recall": 0.95285,
+        "qps": 53.570389149572044
+      },
+      {
+        "target": 0.95,
+        "threads": 24,
+        "condition": "u32_a1_e4096_b128_t24",
+        "recall": 0.95285,
+        "qps": 1201.7577292189667
+      }
+    ]
+  },
   "来源": [
     {
       "path": "research\\artifacts\\experiments\\westc_extreme_v1\\completed_snapshots\\analysis\\all_parameter_points.csv",
@@ -17,8 +54,8 @@
       "machine": "westc"
     }
   ],
-  "摘要SHA256": "470ec24c33031c6eb3c44dbec15a733791ad6fee219f3bdfea2e061b3fded23a",
-  "行数": 16,
+  "摘要SHA256": "bd5596dd164c6881af241afa1a576959f33f439bdd39f867a81bac0b861690fb",
+  "行数": 17,
   "选点": [
     {
       "dataset": "uniform_narrow_1m",

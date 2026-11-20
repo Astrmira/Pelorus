@@ -1,0 +1,21 @@
+\begin{table}[t]
+\centering
+\caption{Automatic entry selection for full \rquiver{}. On each validation set we choose the fastest qualifying combination of entry, $L$ and $B$ at each thread count. Recall and QPS are measured on held-out queries. H denotes hubs alone and P denotes PolarRouter.}
+\label{tab:auto_entry}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+& Target & \multicolumn{3}{c}{One thread} & \multicolumn{3}{c}{24 threads}\\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}
+Dataset & (\%) & Entry & R@10 (\%) & QPS & Entry & R@10 (\%) & QPS\\
+\midrule
+MERU-1M & 98 & H & 98.745 & 3,801 & H & 98.745 & 80,145 \\
+ & 99 & H & 99.203 & 2,868 & H & 99.202 & 64,786 \\
+ & 99.5 & H & 99.580 & 2,270 & H & 99.640 & 38,842 \\
+Cohere-1M & 98 & H & 98.260 & 3,237 & H & 98.260 & 46,870 \\
+ & 99 & H & 99.060 & 1,875 & H & 99.060 & 36,580 \\
+ & 99.5 & P & 99.360 & 921 & H & 99.220 & 17,031 \\
+\bottomrule
+\end{tabular}
+\end{table}

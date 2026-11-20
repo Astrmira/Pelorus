@@ -1,5 +1,6 @@
 dataset,method,graphs,M,efConstruction,build_seconds,peak_recall,qps_90_1t,qps_90_24t,qps_95_1t,qps_95_24t,qps_98_1t,qps_98_24t,qps_1t,p99_1t,qps_24t,qps_995_1t,qps_995_24t
 uniform_narrow_1m,A1B1C1,1,16,128,46.849678484,0.64735,,,,,,,,,,,
+uniform_narrow_1m,A1B1C1-M32,1,32,256,147.534022677,0.95285,65.42778119958072,1201.7577292189667,53.570389149572044,1201.7577292189667,,,,,,,
 uniform_narrow_1m,HDB-FP32-flat,1,32,256,478.151227665,0.9217,18.02646854837868,288.2901444155541,,,,,,,,,
 uniform_narrow_1m,Faiss-centered_ip,1,32,256,311.346633734,0.2986,,,,,,,,,,,
 uniform_narrow_1m,Milvus-Standalone-centered-IP,1,32,256,573.5776282548904,0.46445,,,,,,,,,,,

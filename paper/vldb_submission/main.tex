@@ -23,11 +23,11 @@
 \emergencystretch=2em
 \widowpenalty=10000
 \clubpenalty=10000
-\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
-\setlength{\floatsep}{6pt plus 2pt minus 2pt}
-\setlength{\dbltextfloatsep}{8pt plus 2pt minus 2pt}
-\setlength{\dblfloatsep}{6pt plus 2pt minus 2pt}
-\captionsetup{skip=4pt}
+\setlength{\textfloatsep}{6pt plus 1.5pt minus 1.5pt}
+\setlength{\floatsep}{5pt plus 1.5pt minus 1.5pt}
+\setlength{\dbltextfloatsep}{6pt plus 1.5pt minus 1.5pt}
+\setlength{\dblfloatsep}{5pt plus 1.5pt minus 1.5pt}
+\captionsetup{skip=3pt}
 \graphicspath{{figures/}{../vldb/figures/}}
 
 % 常用数学符号与系统名称宏定义
@@ -116,6 +116,10 @@ The source code, data, and/or other artifacts have been made available at \url{\
 \input{sections/evaluation}
 \input{sections/related}
 \input{sections/conclusion}
+
+\begin{acks}
+We used OpenAI Codex to help run benchmarks and collect measurements, edit and typeset the manuscript, and generate figures and tables.
+\end{acks}
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}

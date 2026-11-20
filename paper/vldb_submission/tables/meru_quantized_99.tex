@@ -1,0 +1,16 @@
+\par\smallskip
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lrrrrrr@{}}
+\multicolumn{7}{@{}l}{\textbf{MERU-1M log-map and quantized controls ($99\%$ validation target, 10,000 test queries)}}\\
+\toprule
+& \multicolumn{3}{c}{1 thread} & \multicolumn{3}{c}{24 threads}\\
+\cmidrule(lr){2-4}\cmidrule(l){5-7}
+Method & Recall@10 (\%) & QPS & p99 (ms) & Recall@10 (\%) & QPS & p99 (ms)\\
+\midrule
+Faiss FP32 (log-map $L_2$) & 99.059 & 2,136 & 0.65 & 99.150 & 15,103 & 2.61\\
+Faiss SQ8 (log-map $L_2$) & 99.119 & 1,220 & 1.07 & 99.119 & 26,786 & 1.28\\
+Milvus SQ8 (centered IP) & 99.405 & 73 & 20.75 & 99.716 & 587 & 115.23\\
+HDB SQ8 (Poincar\'e, FP64 rerank) & 99.224 & 763 & 1.85 & 99.224 & 13,620 & 2.52\\
+Tangent 2-bit (paired engine) & 99.107 & 1,510 & 0.99 & 99.107 & 35,813 & 0.99\\
+\rquiver{} 2-bit (paired engine) & 99.248 & 2,311 & 0.55 & 99.247 & 50,848 & 0.60\\
+\bottomrule
+\end{tabular*}

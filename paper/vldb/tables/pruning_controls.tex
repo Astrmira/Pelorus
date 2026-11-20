@@ -1,0 +1,29 @@
+\begin{table}[t]
+  \centering
+  \caption{QuadriPrune controls on shallow MERU and deep HyperE WordNet. Cells give Recall@10 (\%) on the first build. Each block has its own default.}
+  \label{tab:pruning_controls}
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{@{}lrr@{}}
+    \toprule
+    Construction setting & MERU-1M & HyperE WordNet \\
+    \midrule
+  Default & 99.254 & 68.516 \\
+  Geodesic off & 99.288 & 59.492 \\
+  Ring off & 99.254 & 68.203 \\
+  Inward elevator off & 99.255 & 68.555 \\
+  Outward elevator off & 99.258 & 68.555 \\
+  Ring width 0.30 & 99.254 & 68.945 \\
+  Ring width 0.90 & 99.253 & 68.555 \\
+  Elevator gap 0.09 & 99.252 & 68.672 \\
+  Elevator gap 0.27 & 99.255 & 68.828 \\
+    \midrule
+    \multicolumn{3}{@{}l}{Geodesic and cumulative ring quotas (sixteenths)}\\
+  6, 14 (default) & 99.251 & 68.555 \\
+  4, 14 & 99.289 & 67.969 \\
+  8, 14 & 99.207 & 68.945 \\
+  6, 12 & 99.253 & 68.477 \\
+  6, 15 & 99.255 & 68.711 \\
+    \bottomrule
+  \end{tabular}
+\end{table}

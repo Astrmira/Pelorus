@@ -7,21 +7,21 @@ Modern encoders scale curved representations across graph neural networks~\cite{
 
 Serving low-latency, high-recall approximate nearest neighbor ({ANN}) search over curved manifolds remains a systems bottleneck.
 In flat spaces, proximity graphs ({HNSW}~\cite{malkov2020hnsw}, {NSG}~\cite{fu2019nsg}, {Vamana}/{DiskANN}~\cite{subramanya2019diskann,azizi2025graph}) paired with compact in-memory codes ({LVQ}~\cite{aguerrebere2023similarity}, {BBQ}~\cite{trent2024bbq}, {SymphonyQG}~\cite{gou2025symphonyqg}, and 2-bit Sign-Magnitude ({SM}) in {\quiver}~\cite{xiao2026quiver}) restrict cold FP32 vector reads to tail reranking.
-In hyperbolic space, existing choices force a costly trade-off: hyperbolic {LSH}~\cite{deng2026hyperboliclsh} requires wide multi-table probing at $99\%+$ recall, flattening curved manifolds into inner-product proxies in {Faiss}~\cite{johnson2019billion,douze2024faiss}, {Milvus}~\cite{wang2021milvus}, {AnalyticDB-V}~\cite{wei2020analyticdb}, or {VBASE}~\cite{zhang2023vbase} conflates radial depth with angular similarity, and native hyperbolic graphs ({NMSLIB}~\cite{boytsov2013engineering}, Prokhorenkova et al.~\cite{prokhorenkova2022hyperbolic}, {HyperspaceDB}~\cite{glukhota2026hyperspacedb}) traverse exact vectors ($2\text{--}6$\,KB per hop with FP64 near $\|x\|_2 \to 1/\sqrt{c}$) or apply unfactored ambient quantization under single-predicate pruning.
+Hyperbolic {LSH}~\cite{deng2026hyperboliclsh} requires wide multi-table probing at high recall. A Lorentz inner product can score query--candidate pairs exactly, but a flat {HNSW} graph also needs suitable database--database edges for navigation. We test raw and centered inner-product reductions in {Faiss}~\cite{johnson2019billion,douze2024faiss} and {Milvus}~\cite{wang2021milvus}, and an origin-log-map $L_2$ graph. Native full-precision configurations~\cite{boytsov2013engineering,prokhorenkova2022hyperbolic,glukhota2026hyperspacedb} read full vectors at each hop. {HyperspaceDB} also offers ambient SQ8 traversal, evaluated separately below.
 
-\subsection{Why Flat Graph Indexing Breaks Under Negative Curvature}
+\subsection{Why Flat Graph Indexing Can Fail Under Negative Curvature}
 \label{subsec:intro_obstructions}
 
 Geometrically, $\Bball$ is a \emph{warped product} $\R_{\ge 0} \times_{\frac{1}{\sqrt{c}}\sinh(\sqrt{c}R)} \Sunit$ coupling radial depth $R$ with an exponentially expanding sphere.
-Transplanting flat {Vamana} pruning~\cite{subramanya2019diskann} or flat compressed traversal~\cite{aguerrebere2023similarity,gao2024rabitq,xiao2026quiver} onto $\Bball$ fails due to three coupled obstructions:
+Three geometric effects can impair flat {Vamana} pruning~\cite{subramanya2019diskann} or compressed traversal~\cite{aguerrebere2023similarity,gao2024rabitq,xiao2026quiver} on $\Bball$.
 \begin{enumerate}
   \item \textbf{Cross-Shell Non-Cancellation and Lorentz Blowup.}
   In flat cosine ranking, shared query quantization noise cancels as $u_x \to u_y$~\cite{xiao2026decisions}.
   In $\Bball$, directional inner products are weighted by $W(r_q, r_v) = \frac{2}{c}\sinh\rho_q\sinh\rho_v$: whenever $r_x \ne r_y$, query error leaves an uncancelled residual proportional to $W(r_q, r_y) - W(r_q, r_x)$, while directly quantizing $(D+1)$-D {Lorentz} spatial coordinates scales noise by $\|\tilde{z}\|_2 = \Theta(e^\rho)$.
 
   \item \textbf{Radial Occlusion and Same-Shell Cone Collapse.}
-  Because geodesics bend toward $0 \in \Bball$, an interior neighbor $p$ ($R_p < R_u$) admitted during {Vamana} pruning~\cite{subramanya2019diskann} occludes \emph{every} candidate inside $R_v \le (R_u - \alpha R_p)/(\alpha + 1)$ across all angles $\theta_{pv} \in [0, \pi]$, while along an outer shell $\rho = \sqrt{c}R$, negative curvature contracts the unoccluded angular cone against $p = 0$ exponentially as $\sin(\theta_{uv}/2) < \sinh(\frac{\alpha}{2}\rho)/\sinh\rho \sim e^{-(2-\alpha)\rho/2}$ ($73.7^\circ$ flat $\to 23.1^\circ$ at $\rho = 4$ for $\alpha = 1.2$).
-  On {Cohere-1M}, isotropic pruning strands $518\text{--}626$ boundary islands and cuts $99\%$-recall QPS by $5.26\times$ ($2{,}071 \to 394$).
+  An interior neighbor $p$ with $R_p<R_u/\alpha$ in {Vamana} pruning~\cite{subramanya2019diskann} occludes every candidate inside $R_v\le(R_u-\alpha R_p)/(\alpha+1)$ by the triangle inequality. For two vertices on the same shell of depth $\rho$, an origin neighbor leaves an angular cone with $\sin(\theta_{uv}/2)<\sinh(\alpha\rho/2)/\sinh\rho$. At $\alpha=1.2$ its half-angle falls from $73.7^\circ$ in the flat limit to $23.1^\circ$ at $\rho=4$.
+  These bounds motivate reserving angular links. We measure the effect of removing each pruning channel on {Cohere-1M} (\S\ref{subsec:eval_ablation}).
 
   \item \textbf{Boundary Cluster Margins and Fixed-Budget Pool Dilution.}
   For equal-depth candidates in a tight cone ($\alpha_v = \langle u_v, \mu_c\rangle \to 1$), the ranking margin scales as $\beta_{q,c}\beta_v$ times the tangent-direction difference, while global-code comparison error depends on candidate-error covariance (Theorem~\ref{thm:tangent_cone}).
@@ -35,17 +35,17 @@ Transplanting flat {Vamana} pruning~\cite{subramanya2019diskann} or flat compres
 
 We introduce \textbf{\rquiver{}}, a hyperbolic proximity-graph index built on \emph{warped-product polar decoupling}.
 Each vector is factored into unquantized FP32 radial scalars $(r_x, F_x, \rho_x)$ ($F_x = f_x/2$) in a 32-byte header and a scale-invariant 2-bit {SM} code on $\Sunit$, keeping directional-code error out of $1 - c r_x^2$.
-Every design mechanism is paired directly with its geometric derivation (\S\ref{sec:design}--\S\ref{sec:system}), with full proofs in the supplemental material:
+Geometric analysis motivates the design (\S\ref{sec:design}--\S\ref{sec:system}). Pruning weights and gate thresholds are empirical. Full proofs appear in the supplemental material.
 \begin{itemize}
   \item \textbf{Polar Representation and Tangent-Cone Recovery (\S\ref{subsec:polar_layout}--\S\ref{subsec:tangent_cone}):}
-  Building on flat comparison-decision theory~\cite{xiao2026decisions}, we prove query depth invariance on isobathic shells, characterize cross-shell query-noise non-cancellation and {Lorentz}-MIPS blowup, and introduce purity-gated zero-byte-per-vertex tangent-cone residuals (\texttt{ResidualConeDict}) that attenuate intra-cone error without global rotations while keeping diffuse manifolds on the zero-overhead global path.
+  We derive the equal-shell flip criterion and the cross-shell variance of bilinear query error~\cite{xiao2026decisions}. A purity gate reuses the same directional bits for tangent residuals in tight cones.
 
   \item \textbf{Fiber-Bundle Topology and Routing (\S\ref{subsec:compass}--\S\ref{subsec:router}):}
-  We establish radial occlusion and exponential cone contraction, motivating inside-out depth seeding, four-channel \emph{QuadriPrune} (stem-excess fibers, shielded rings, and radial elevators), spanning-tree chord-swap repair ($1{,}000{,}000/1{,}000{,}000$ directed {BFS} reachability from entry hubs across all measured graphs), and constrained radial-minimizer routing.
+  QuadriPrune reserves links for angular and radial travel during inside-out construction. Chord swaps make all vertices reachable from entry hubs on every tested million-point graph.
 
   \item \textbf{Page-Co-Located Execution (\S\ref{sec:system}):}
-  We co-locate headers, variance-stabilized 256-bit sketches, and 2-bit bitplanes inside $4096$\,B OS pages (\texttt{HotSmPage}) to avoid secondary {DTLB} walks, pair a 3-to-2 carry-save {AVX2} kernel with deterministic orthogonal-projection pool refinement (\textsc{Stage-0.5}) and Conformal Jacobian plateau gating (\textsc{CJ-Gate}), and rerank in FP64 {SIMD}.
+  Each \texttt{HotSmPage} record co-locates the header, sketch and bitplanes. An AVX2 traversal kernel feeds asymmetric pool refinement and FP64 reranking.
 
   \item \textbf{Zen~4 Evaluation (\S\ref{sec:eval}):}
-  Across eight benchmarks, \rquiver{} speeds up {Cohere-1M} builds by $5.44\times$ over {Polar-FP32} ($1.91\times$ over {Polar-SQ8}), shrinks hot navigation memory to $517.0$\,MB page-co-located ($2.44\times$ below {Polar-SQ8}; $485.0$\,MB / $2.60\times$ split), improves {Cohere-1M} $99\%$-recall QPS by $4.30\times$/$6.31\times$ over {Polar-FP32} ($17.0\times$--$28.3\times$ over {HyperspaceDB} at $95\%$ and $22.9\times$--$58.2\times$ over {Faiss}/{Milvus} at $98\%$), hits $53{,}483$\,QPS on {MERU-1M} ($3.37\times$--$3.88\times$ over {HyperspaceDB} FP32), raises {Clustered-Narrow} recall from $34.22\%$ to $99.385\%$ at $L=256$ ($99.80\%$ at $L=384$), and characterizes recall limits on {Uniform-Narrow}.
+  Pelorus reaches $2{,}547$/$53{,}483$\,QPS (1T/24T) at $99.25\%$ recall on native {MERU-1M}. Deep native {WordNet} and controlled synthetic cones isolate the conditions under which residual coding improves recall.
 \end{itemize}

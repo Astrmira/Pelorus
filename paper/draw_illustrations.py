@@ -386,8 +386,8 @@ def execution_figure():
         for offset in [-20,0,20]:
             d.line(x+offset-4,374,x+offset+4,382,RED,2.5)
             d.line(x+offset-4,382,x+offset+4,374,RED,2.5)
-    d.text(788,438,"57.6%",39,RED,"bold","middle")
-    d.text(788,471,"fewer bitplane loads",26,RED,anchor="middle")
+    d.text(788,438,"51.65%",39,RED,"bold","middle")
+    d.text(788,471,"of candidates rejected",26,RED,anchor="middle")
     d.rect(997,139,178,155,NAVY,NAVY,2,5)
     for i in range(7):
         d.line(1011+i*24,133,1011+i*24,139,INK,2)
@@ -414,7 +414,8 @@ def execution_figure():
     d.text(1387,168,"projection",24,anchor="middle")
     d.text(1387,217,"1.5 KiB i16",24,anchor="middle")
     d.text(1387,246,"query · 768D",22,anchor="middle")
-    d.text(1387,285,"+58.2% QPS",25,TEAL,"bold","middle")
+    d.text(1387,281,"+2.2% / +36.8% QPS",21,TEAL,"bold","middle")
+    d.text(1387,308,"at 99% / 99.5% recall",20,TEAL,anchor="middle")
     d.arrow([(1456,145),(1493,145)],INK,2.1)
     d.text(1640,85,"CJ-Gate",30,weight="bold",anchor="middle")
     px, py, pw, ph = 1502, 109, 267, 181

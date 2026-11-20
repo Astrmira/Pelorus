@@ -15,15 +15,16 @@ FIGURES = ROOT / "figures"
 DATA = FIGURES / "data" / "figure_points.csv"
 STYLES = {
     "A1B1C1": ("Pelorus", "#0072B2", "o", "-"),
+    "A1B1C1-M32": ("Pelorus (32/256)", "#0072B2", "o", "-"),
     "A8/symmetric": ("Pelorus-Core", "#D55E00", "s", "--"),
     "A7/main": ("Pelorus-Split", "#009E73", "^", "-."),
     "SQ8/main": ("Polar-SQ8", "#CC79A7", "D", ":"),
     "FP32/main": ("Polar-FP32", "#555555", "v", "--"),
     "A8/colocated": ("w/o SymSketch256", "#E69F00", "^", "--"),
     "A8/main": ("w/o HotSmPage (SoA)", "#009E73", "D", "-."),
-    "A8/no_asymmetric_gate": ("w/o Stage-0.5 gate", "#CC79A7", "v", ":"),
-    "A8构图关闭-connectivity_repair": ("w/o Chord-Swap", "#56B4E9", "P", "--"),
-    "A8构图关闭-compass": ("w/o QuadriPrune", "#555555", "X", "-."),
+    "A8/no_asymmetric_gate": ("SoA, Stage-0.5 off", "#CC79A7", "v", ":"),
+    "A8构图关闭-connectivity_repair": ("SoA, Chord-Swap off", "#56B4E9", "P", "--"),
+    "A8构图关闭-compass": ("Two-pass, SoA", "#555555", "X", "-."),
     "A8/samegraph_sq8": ("SQ8 (same graph)", "#E69F00", "^", "--"),
     "A8/samegraph_fp32": ("FP32 (same graph)", "#0072B2", "s", "-."),
     "HDB-FP32-dynamic": ("HDB FP32 dynamic", "#D55E00", "s", "--"),
@@ -286,7 +287,7 @@ def main():
         scaling_figure(points, dataset)
     pareto_figure(points, "cohere_1m", 1, [
         "A8/symmetric", "A8/colocated", "A8/main", "A8/no_asymmetric_gate",
-        "A8构图关闭-connectivity_repair", "A8构图关闭-compass",
+        "A8构图关闭-connectivity_repair",
     ], "ablation_geometry_cohere_1m", wide=True)
     pareto_figure(points, "cohere_1m", 1, [
         "A8/main", "A8/samegraph_sq8", "A8/samegraph_fp32", "SQ8/main", "FP32/main",
@@ -295,7 +296,7 @@ def main():
     comparison_table(
         source_name="synthetic_summary.csv", output_name="synthetic_comparison.tex",
         datasets=("uniform_narrow_1m", "uniform_wide_1m", "clustered_narrow_1m", "clustered_wide_1m"),
-        methods=("A1B1C1", "HDB-FP32-flat", "Faiss-centered_ip", "Milvus-Standalone-centered-IP"),
+        methods=("A1B1C1", "A1B1C1-M32", "HDB-FP32-flat", "Faiss-centered_ip", "Milvus-Standalone-centered-IP"),
     )
 
 

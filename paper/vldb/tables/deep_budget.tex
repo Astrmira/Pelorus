@@ -1,0 +1,20 @@
+\begin{table}[htbp]
+  \centering
+  \caption{HyperE WordNet at 1T. Each row uses the fastest qualifying configuration of the first build. Candidate and read counts are per-query means measured outside the timed pass.}
+  \label{tab:deep_budget}
+  \footnotesize
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular}{@{}llrrrrrr@{}}
+  \toprule
+  Dict. & Target & $L/B_0$ & Recall & Admitted & Read & QPS & p99 (ms) \\
+  \midrule
+  Off & 80\% & 2048/2048 & 81.64\% & 2048 & 1642.6 & 548 & 2.260 \\
+  Off & 90\% & 8192/8192 & 93.55\% & 8192 & 5373.8 & 168 & 7.065 \\
+  Off & 95\% & 16384/16384 & 96.48\% & 16384 & 8862.8 & 97 & 12.114 \\
+  \midrule
+  On & 80\% & 1024/1024 & 83.91\% & 1024 & 829.7 & 930 & 1.306 \\
+  On & 90\% & 4096/4096 & 93.09\% & 4096 & 2776.6 & 304 & 4.063 \\
+  On & 95\% & 16384/8192 & 96.02\% & 8192 & 5163.3 & 100 & 12.007 \\
+  \bottomrule
+  \end{tabular}
+\end{table}

@@ -28,7 +28,7 @@ Stereographic projection $\Pi : \Lmod \to \Bball$,
   \label{eq:lorentz_isometry}
 \end{equation}
 is a global Riemannian isometry satisfying $d_{\mathbb{B}}(\Pi(z), \Pi(z')) = d_{\mathbb{L}}(z, z')$ for all $z, z' \in \Lmod$~\cite{nickel2018lorentz}\ifpreprint\ (proved algebraically in Appendix~\ref{app:warped_product})\fi.
-Projecting $\Lmod$ embeddings via~\eqref{eq:lorentz_isometry} at ingestion eliminates the redundant time-like coordinate $z_0$ without losing exact geodesic distances or rankings; as shown in Theorem~\ref{thm:conformal_flip}(3), it also avoids exponential quantization error blowup on unbounded spatial norms $\|\tilde{z}\|_2$.
+The equality concerns exact coordinates and arithmetic. In a numeric check over 2,000 pairs of {MERU-1M} query points, distances computed in the two models in FP64 differed by at most $2.56\times10^{-15}$. Conversion to a lower-precision storage type is a separate operation. Table~\ref{tab:depth_precision} measures its effect at larger depths.
 
 \paragraph{Warped-Product Decomposition and Order-Isomorphic Polar Proxy.}
 Every $x \in \Bball$ decomposes into Euclidean radius $r_x = \|x\|_2 \in [0, 1/\sqrt{c})$ and unit spherical direction $u_x \in \Sunit$ ($u_0 = e_1$ at $r_x = 0$).
@@ -121,7 +121,7 @@ As established by comparison-decision stability theory for flat quantized search
     \label{eq:psi_prune}
   \end{equation}
 \end{enumerate}
-For any noisy estimator $\widehat{\Psi} = \Psi + \Delta\widehat{\Psi}$, the probability of a decision flip is controlled by its \emph{margin-to-noise ratio}~\cite{xiao2026decisions}:
+For a noisy estimator $\widehat{\Psi} = \Psi + \Delta\widehat{\Psi}$, we summarize the mean score relative to its error scale by the \emph{margin-to-noise ratio}~\cite{xiao2026decisions}:
 \begin{equation}
   \MNR(\widehat{\Psi}) \triangleq \frac{|\E[\widehat{\Psi}]|}{\sqrt{\Var(\Delta\widehat{\Psi})}}.
   \label{eq:mnr_def}

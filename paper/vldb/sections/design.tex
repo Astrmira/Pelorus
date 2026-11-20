@@ -21,7 +21,7 @@ For each vertex $v \in \{0, \dots, N-1\}$, \rquiver{} stores a fixed 32-byte pol
   \item \emph{Conditional-mean two-level {SM} scalars (12\,B):} weak-coordinate mean $a_v$, level step $\delta_v = b_v - a_v$, and reconstructed two-level norm $\sigma_v = \|\hat{u}_v\|_2$ in FP32 (Lemma~\ref{lem:sm_pythagorean}).
   \item \emph{Bitpacked count/cone tag and axial/norm scalar (8\,B):} a 32-bit word packing the 20-bit strong-magnitude count $s_v$ with a 12-bit residual cone tag ($\text{cone\_id}$, with \texttt{0x0FFF} denoting global native {SM}), paired with an FP32 field storing axial alignment $\alpha_v = \langle u_v, \mu_c\rangle$ for residual-cone vertices or precomputed canonical inverse norm $(D+3s_v)^{-1/2}$ for global vertices. The triple $(a_v,\delta_v,\sigma_v)$ supports the main conditional-mean hop scorer and \textsc{Stage-0.5}. The global inverse-norm slot supports legacy canonical paths, while residual scoring reads $\alpha_v$ and computes $\beta_v$.
 \end{itemize}
-Table~\ref{tab:node_layout} gives the per-vertex logical payload at $D=768$, $M_0=32$ ($384$\,B with \texttt{SymSketch256} under \texttt{HotSmPage}, or $352$\,B without the sketch in split form), and Table~\ref{tab:memory_audit} reconciles this payload with the benchmark's navigation-byte counter. The measured allocation is $517.0$\,MB with page co-location ($2.44\times$ below the measured {Polar-SQ8} implementation at $1{,}261.0$\,MB and $6.90\times$ below {Polar-FP32} at $3{,}565.0$\,MB) or $485.0$\,MB in split form ($2.60\times$ and $7.35\times$ smaller).\ifpreprint\ Appendix~\ref{app:scalar_rounding} quantifies header rounding.\fi
+At $D=768$, $M_0=32$, the co-located 2-bit record and 32 active edges occupy $384$\,B per vertex ($352$\,B without the sketch). Table~\ref{tab:node_layout} gives this logical payload. Table~\ref{tab:memory_audit} includes reserved edges, router arrays and the cold store. The active hot arrays occupy $517$\,MB for the page layout, $1{,}069$\,MB for {Polar-SQ8}, and $3{,}373$\,MB for {Polar-FP32}. Appendix~\ref{app:scalar_rounding} quantifies FP32 scalar rounding.
 
 \begin{table}[t]
   \centering
@@ -53,7 +53,7 @@ Table~\ref{tab:node_layout} gives the per-vertex logical payload at $D=768$, $M_
  Component & 2-bit split & 2-bit page-co-located & Polar-SQ8 & Polar-FP32\\
  \midrule
  32-byte polar headers & 32.000000 & \multirow{3}{*}{256.000000} & 32.000000 & 32.000000\\
- 2-bit directional storage & 192.000000 & & 192.000000 & 192.000000\\
+ 2-bit directional storage & 192.000000 & & 0 & 0\\
  Sketch and record alignment & 0 & & 0 & 0\\
  32 logical edge slots, 32-bit IDs & 128.000000 & 128.000000 & 128.000000 & 128.000000\\
  32 reserved neighbor slots & 128.000000 & 128.000000 & 128.000000 & 128.000000\\
@@ -63,11 +63,13 @@ Table~\ref{tab:node_layout} gives the per-vertex logical payload at $D=768$, $M_
  SQ8 directional coordinates & 0 & 0 & 768.000000 & 0\\
  FP32 coordinates used in traversal & 0 & 0 & 0 & 3,072.000000\\
  \midrule
- Navigation total & 484.974912 & 516.974912 & 1,260.974912 & 3,564.974912\\
+ Active navigation & 484.975 & 516.975 & 1,068.975 & 3,372.975\\
+ Additional cold FP32 vectors & 3,072 & 3,072 & 3,072 & 0\\
+ Accounted index total & 3,556.975 & 3,588.975 & 4,140.975 & 3,372.975\\
  \bottomrule
  \end{tabular}
  \par\vspace{2pt}
- {\footnotesize The SQ8/FP32 controls retain their 2-bit store and add an 8-byte inverse norm per vertex. Router arrays comprise 393,216 B cone bitplanes, 32,768 B SM parameters, 8,192 B inverse norms, 524,288 B cell representatives, 16,384 B coarse shortlists, and 64 B origin hubs. Adjacency stores forward lists in one fixed-stride array. Reverse insertions update these lists in place. The counter sums navigation-array payloads. Process RSS includes the cold vector store, ID maps, and allocator state.}
+ {\footnotesize The benchmark retained an unused $192$\,MB 2-bit allocation in the SQ8 and FP32 controls. Including it gives raw navigation counters of $1{,}261$ and $3{,}565$\,MB. The table counts active arrays. Polar-FP32 shares its coordinate array between traversal and reranking. Router arrays comprise 393,216 B cone bitplanes, 32,768 B SM parameters, 8,192 B inverse norms, 524,288 B cell representatives, 16,384 B coarse shortlists, and 64 B origin hubs. Adjacency stores forward lists in one fixed-stride array. Reverse insertions update these lists in place. Process RSS includes the cold vector store, ID maps, and allocator state.}
 \end{table*}
 
 \paragraph{Purity-Gated \texttt{ResidualConeDict}.}
@@ -77,8 +79,8 @@ To realize Theorem~\ref{thm:tangent_cone}(3) without disturbing unclustered mani
   \item \emph{Leader seeding and two-round purity refinement:} Otherwise, a deterministic spherical leader pass collects candidate unit axes separated by cosine $< \tau_{\mathrm{lead}} = 0.91$ (capped at $1{,}024$ candidates), followed by two rounds of spherical mean refinement assigning samples with $\langle u_s, \mu_c\rangle \ge \alpha_{\min} = 0.94$.
   A cone $\mu_c$ is retained if and only if it meets minimum sample support $\operatorname{clamp}(\lfloor N_{\mathrm{samp}}/1024\rfloor, 3, 12)$ and achieves high intra-cone mean alignment $\bar{\alpha}_c \ge 0.955$.
 \end{enumerate}
-Every database vertex $v$ achieving $\alpha_v = \langle u_v, \mu_c\rangle \ge 0.94$ against its nearest retained axis stores the 2-bit {SM} code of its normalized tangent residual $\tilde{r}_v = (u_v - \alpha_v\mu_c)/\sqrt{1 - \alpha_v^2}$ in the existing 192-byte bitplane slot and records $\text{cone\_id}$ in the 12-bit header field (with \texttt{0x0FFF} reserved for global {SM}, \textbf{0\,B/vertex} overhead), giving $\beta_v^2=1-\alpha_v^2\le0.1164$. The cosine-error multiplier is $\beta_{q,c}\beta_v$ in Theorem~\ref{thm:tangent_cone}(3).
-Setting $\alpha_{\min} = 0.94$ and $\bar{\alpha}_c \ge 0.955$ activates residual coding only when tight concentration ($\beta_v^2 \le 0.1164$) outweighs axis-projection cost: all four diffuse real datasets pass through on the zero-overhead global path ($0$ cones), whereas both clustered benchmarks retain all $256$ axes ($0.50$\,MiB at $D=512$).
+Every database vertex $v$ achieving $\alpha_v = \langle u_v, \mu_c\rangle \ge 0.94$ against its nearest retained axis stores the 2-bit {SM} code of its normalized tangent residual $\tilde{r}_v = (u_v - \alpha_v\mu_c)/\sqrt{1 - \alpha_v^2}$ in the existing $16\lceil D/64\rceil$-byte bitplane slot and records $\text{cone\_id}$ in the 12-bit header field (with \texttt{0x0FFF} reserved for global {SM}, \textbf{0\,B/vertex} overhead), giving $\beta_v^2=1-\alpha_v^2\le0.1164$. The cosine-error multiplier is $\beta_{q,c}\beta_v$ in Theorem~\ref{thm:tangent_cone}(3).
+On the four primary real datasets the dictionary stays empty. {MERU-1M} and {WordNet-Hazy} exit at the depth check ($p_{90}(\rho)=0.26$ and $0.78$). {Cohere-1M} and {OpenAI-1536} pass that check but have insufficient directional concentration. Both clustered synthetic sets retain 256 axes ($0.50$\,MiB at $D=512$). The deeper native {HyperE WordNet} embedding retains 33 axes (\S\ref{subsec:eval_deep}).
 
 \subsection{Inside-Out Seeding and Stem-Excess QuadriPrune}
 \label{subsec:compass}
@@ -157,16 +159,16 @@ At constant depth the elevator sets are empty and the ring ranks by angle, using
 \subsection{Spanning-Tree Chord-Swap Island Repair}
 \label{subsec:repair}
 
-Parallel batch insertion and hub saturation can still leave $0.05\%\text{--}0.06\%$ of extreme boundary vertices with zero incoming edges ($\deg^-(u) = 0$: $518\text{--}626$ islands on {Cohere-1M}), capping asymptotic recall strictly below $100\%$.
+Two unrepaired {Cohere-1M} builds left 521 and 628 vertices with zero in-degree. Directed {BFS} from the entry hub missed 530 and 634 vertices, respectively.
 The chord-swap pass in Algorithm~\ref{alg:compass_build} grows directed {BFS} entry reachability while preserving maximum out-degree $\deg^+(p)\le M_0$. A qualifying anchor has spare capacity or an eligible non-tree chord.
 Directed {BFS} initializes a spanning tree $(\mathcal{R},\texttt{parent})$ from the router entry hub, each unreachable vertex $u \notin \mathcal{R}$ selects a reachable anchor $p \in \mathcal{R}$ (scanning $N^+(u)$, router hubs, and the interior core prefix) and either appends $p \to u$ (if $\deg^+(p) < M_0$) or replaces a peripheral non-tree chord $p \to w^\star$ satisfying both $\texttt{parent}[w^\star] \ne p$ and $\deg^-(w^\star) \ge 2$, decrementing $\deg^-(w^\star)$ in place and expanding $(\mathcal{R}, \texttt{parent})$ incrementally from $u$\ifpreprint\ (monotonic reachability invariant proved in Appendix~\ref{app:vamana_pathologies})\fi.
-Because no spanning-tree edge is ever overwritten, $\mathcal{R}$ grows monotonically without cycle breakage; across all 21 million-scale {Zen~4} graphs, the pass reduces zero-in-degree islands to \textbf{0} ($1{,}000{,}000 / 1{,}000{,}000$ directed-{BFS} reachable from the entry hub) in under $0.3$\,s.
+Because the pass preserves every spanning-tree edge, $\mathcal{R}$ grows monotonically. After repair, every vertex had positive in-degree on all 21 Core builds in the three-seed sweep. Directed {BFS} from the entry hub reached all $990{,}000$ on each {OpenAI-1536} build and all $1{,}000{,}000$ on each of the other 18 builds.
 
 \subsection{Convex-Support Polar Router}
 \label{subsec:router}
 
 \rquiver{} builds $C=\min(N,\operatorname{clamp}(\lfloor N/100\rfloor,64,2048))$ directional landmarks in SM mode and crosses them with eight quantile-adaptive shells. At 1M scale this gives 2,048 fine cones and 16,384 cells, each storing up to eight 32-bit vertex IDs. For $C>256$, 64 coarse landmarks each retain a 128-cone query shortlist.
-The query scores coarse landmarks, expands the leading shortlists, and uses the constrained radial minimizer $\rho_{\mathrm{sup}}^*(\rho_q,\gamma)$ from Proposition~\ref{prop:geodesic_apex}(2) to select shell representatives. The radial support endpoints are the smallest positive sampled database depth and the maximum depth. The variance-stabilized configuration activates a sampled isotropy guard that scans fine cones directly when coarse alignment falls below its dimension-scaled threshold. Table~\ref{tab:fixed_parameters} gives the fixed settings.
+The query scores coarse landmarks, expands the leading shortlists, and uses the constrained radial minimizer $\rho_{\mathrm{sup}}^*(\rho_q,\gamma)$ from Proposition~\ref{prop:geodesic_apex}(2) to select shell representatives. The radial support endpoints are the smallest positive sampled database depth and the maximum depth. The variance-stabilized configuration activates a sampled isotropy guard that scans fine cones directly when coarse alignment falls below its dimension-scaled threshold. With validation queries, the entry policy can be tuned jointly with $(L,B)$ at each thread count. The hub-only policy skips the cone search and seeds from the origin hubs. Table~\ref{tab:fixed_parameters} gives the fixed settings.
 
 \begin{table*}[t]
  \centering

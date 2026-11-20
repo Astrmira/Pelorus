@@ -31,7 +31,7 @@ By the hyperbolic law of cosines, $\frac{c}{4}P_{\mathbb{B}}(q, v) = \sinh^2\big
   \label{eq:proxy_to_geodesic}
 \end{equation}
 Strict monotonicity of~\eqref{eq:proxy_to_geodesic} makes $P_{\mathbb{B}}$ order-isomorphic to $d_{\mathbb{B}}$, deferring $\asinh$ to the final $k$ results.
-The implementation stores $F_v = f_v/2 = (1 - c r_v^2)^{-1}$ and evaluates $P_{\mathrm{impl}} = P_{\mathbb{B}}/4$ with $d_{\mathbb{B}} = \frac{2}{\sqrt{c}}\asinh(\sqrt{c\,P_{\mathrm{impl}}})$ across beam thresholds, radial gates, and Jacobian scales (as $c \to 0^+$, $P_{\mathrm{impl}}(q, v) \to \|q - v\|_2^2$).
+The implementation stores $F_v = f_v/2 = (1 - c r_v^2)^{-1}$ and evaluates $P_{\mathrm{impl}} = P_{\mathbb{B}}/4$ with $d_{\mathbb{B}} = \frac{2}{\sqrt{c}}\asinh(\sqrt{c\,P_{\mathrm{impl}}})$. Beam thresholds, radial gates, and Jacobian scales expressed in $P_{\mathbb B}$ units are all divided by four in code (as $c \to 0^+$, $P_{\mathrm{impl}}(q, v) \to \|q - v\|_2^2$).
 
 \subsection{Two-Level Spherical SM and Comparison Operators}
 \label{subsec:sm_decisions}
@@ -65,4 +65,4 @@ while canonical codes $\sgn(u_i)(1 + m_i) \in \{\pm 1, \pm 2\}$ with inverse nor
 Given $\mathcal{X} \subset \Bball$ ($|\mathcal{X}| = N$) and query $q \in \Bball$, {ANN} search returns $\widehat{\mathcal{N}}_k(q)$ maximizing $\operatorname{Recall@}k = |\widehat{\mathcal{N}}_k(q) \cap \mathcal{N}_k(q)| / k$ against {QPS} and p99 latency.
 By flat comparison-decision stability theory~\cite{xiao2026decisions}, quantized graph indexing depends on sign preservation of two binary operators rather than $|\widehat{P}_{\mathbb{B}} - P_{\mathbb{B}}|$:
 (1)~\emph{shared-query ranking} $\Psi_{\mathrm{rank}}(q; x, y) \triangleq P_{\mathbb{B}}(q, x) - P_{\mathbb{B}}(q, y)$ in beam search, and
-(2)~\emph{shared-target pruning} $\Psi_{\mathrm{prune}}(u, w, v; \alpha) \triangleq \alpha\,d_{\mathbb{B}}(w, v) - d_{\mathbb{B}}(u, v) \le 0$ ($\alpha > 1$) in {Vamana} construction~\cite{subramanya2019diskann}, whose flip probability under $\widehat{\Psi} = \Psi + \Delta\widehat{\Psi}$ is governed by $\MNR(\widehat{\Psi}) \triangleq |\E[\widehat{\Psi}]| / \sqrt{\Var(\Delta\widehat{\Psi})}$~\cite{xiao2026decisions}.
+(2)~\emph{shared-target pruning} $\Psi_{\mathrm{prune}}(u, w, v; \alpha) \triangleq \alpha\,d_{\mathbb{B}}(w, v) - d_{\mathbb{B}}(u, v) \le 0$ ($\alpha > 1$) in {Vamana} construction~\cite{subramanya2019diskann}. For $\widehat{\Psi} = \Psi + \Delta\widehat{\Psi}$ we characterize decision margins by $\MNR(\widehat{\Psi}) \triangleq |\E[\widehat{\Psi}]| / \sqrt{\Var(\Delta\widehat{\Psi})}$~\cite{xiao2026decisions}.

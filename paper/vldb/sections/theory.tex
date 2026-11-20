@@ -17,7 +17,7 @@ For the normalized bilinear score $\langle\hat u_q/\sigma_q,\hat u_v/\sigma_v\ra
   + \underbrace{\langle e_q, e_v\rangle}_{\xi_{qv}},
   \label{eq:bilinear_error}
 \end{equation}
-The calibrated hop score~\eqref{eq:sm_calibration} applies its rational map after this bilinear product (while \textsc{Stage-0.5} evaluates the uncalibrated linear projection directly at $e_q = 0$). Here $\eta_q(u_v)$ is the first-order query projection, $\eta_v(u_q)$ is the first-order candidate projection, and $\xi_{qv}$ is the second-order cross residual.
+The hop score~\eqref{eq:sm_calibration} calibrates this product. Setting $e_q=0$ leaves $\langle u_q,\hat u_v\rangle/\sigma_v$ in the bilinear model. The asymmetric projection in~\eqref{eq:orth_proj_asym} divides by $\sigma_v^2$ before clipping. Here $\eta_q(u_v)$ is the first-order query projection, $\eta_v(u_q)$ is the first-order candidate projection, and $\xi_{qv}$ is the second-order cross residual.
 In flat cosine ranking ($W \equiv 1$), comparing angularly close candidates $u_x, u_y$ subtracts $\eta_q(u_x) - \eta_q(u_y) = \langle e_q, u_x - u_y\rangle$, with variance $(u_x-u_y)^\top\Sigma_q(u_x-u_y)$ for $\Sigma_q=\Cov(e_q)$. The scaling $\|\Sigma_q\|_2=O(1/D)$ gives standard deviation $O(\|u_x-u_y\|_2/\sqrt D)$~\cite{xiao2026decisions}.
 On $\Bball$, conformal radial weights reshape this behavior in four distinct ways.
 
@@ -32,7 +32,7 @@ Let $q, x, y \in \Bball$ ($r_q > 0$) satisfy $P_{\mathbb{B}}(q, x) < P_{\mathbb{
     \ge \frac{\Delta_P(q; x, y)}{2 r_q f_q}.
     \label{eq:exact_flip_criterion}
   \end{equation}
-  When $x, y$ lie on an \emph{isobathic shell} ($r_x = r_y = r > 0$),~\eqref{eq:exact_flip_criterion} simplifies to $\varepsilon_\angle(q, y) - \varepsilon_\angle(q, x) \ge \gamma_{qx} - \gamma_{qy}$: both $f_q$ and $f_x$ cancel identically, rendering same-shell flip probabilities completely invariant to query and candidate boundary proximity ($f_q, f_x \to \infty$).
+  When $x, y$ lie on an \emph{isobathic shell} ($r_x = r_y = r > 0$),~\eqref{eq:exact_flip_criterion} simplifies to $\varepsilon_\angle(q, y) - \varepsilon_\angle(q, x) \ge \gamma_{qx} - \gamma_{qy}$. At fixed directions and directional estimates, both radial factors cancel from the criterion.
 
   \item \textbf{Cross-shell query-noise non-cancellation:}
   For the bilinear error~\eqref{eq:bilinear_error}, the ranking perturbation $\Delta\widehat{\Psi}_{\mathrm{rank}}(q; x, y) = \widehat{P}_{\mathbb{B}}(q, x) - \widehat{P}_{\mathbb{B}}(q, y) - \Psi_{\mathrm{rank}}(q; x, y)$ contains an uncancelled query term $d_q(r_q; r_x, r_y)\,\eta_q(u_x)$ with $d_q(r_q; r_x, r_y) = W(r_q, r_y) - W(r_q, r_x)$.
@@ -45,7 +45,7 @@ Let $q, x, y \in \Bball$ ($r_q > 0$) satisfy $P_{\mathbb{B}}(q, x) < P_{\mathbb{
     \end{aligned}
     \label{eq:cross_shell_var}
   \end{equation}
-  For fixed nonzero shell gap and $1-\gamma_{qx}^2>0$, this expression grows as $\Theta(e^{2\rho_q+2\max(\rho_x,\rho_y)}/D)$ at large depths. Inside a deep-shell band of width $\delta_\rho$, its weight mismatch is $O(\delta_\rho^2W^2)$. An unquantized query sets $e_q=0$ in pool re-scoring.
+  For fixed nonzero shell gap and $1-\gamma_{qx}^2>0$, this expression grows as $\Theta(e^{2\rho_q+2\max(\rho_x,\rho_y)}/D)$ at large depths. Inside a deep-shell band of width $\delta_\rho$, its weight mismatch is $O(\delta_\rho^2W^2)$. With the exact query direction, $e_q=0$ and this variance term vanishes.
 
   \item \textbf{Spatial {Lorentz}-MIPS quantization scaling:}
   Under a spatial-error model $\Cov(\epsilon_v)=\Theta(\|\tilde z_v\|_2^2/D)I_D$, directly quantizing spatial coordinates $\tilde{z} = \frac{1}{\sqrt{c}}\sinh\rho_z\,u_z \in \R^D$ on $\Lmod$ to approximate the {Lorentz} inner product $-z_0 z'_0 + \langle \tilde{z}, \tilde{z}'\rangle$ without polar norm separation incurs coordinate error standard deviation $\Theta(\frac{1}{c\sqrt{D}}\sinh\rho_q\sinh\rho_v)$ even at $\theta_{qv} = 0$, giving nonzero spatial inner-product variance on aligned rays. Polar storage supplies the scalar radial lower bound independently of directional evaluation\ifpreprint\ (complete proof in Appendix~\ref{app:conformal_flips})\fi.
@@ -59,12 +59,12 @@ Adding and subtracting $W(r_q, r_y)\eta_q(u_x)$ in~\eqref{eq:bilinear_error} iso
 Under the stated spatial-error model on $\Lmod$, a quantizer applied to $\tilde{z}_v$ scales quantization step size by $\|\tilde{z}_v\|_2 = c^{-1/2}\sinh\rho_v$, injecting $\Theta(e^{\rho_q + \rho_v}/\sqrt{D})$ noise even along radial lines where polar $R(r_q, r_v)$ is exact.
 \end{proof}
 
-Theorem~\ref{thm:conformal_flip} establishes why \rquiver{} projects $\Lmod \to \Bball$ at ingestion, stores $(r_v,f_v)$ as unquantized FP32 scalars, isolates lateral graph edges inside isobathic shells $|\rho_v - \rho_u| \le \delta_\rho$, and applies an unquantized-query refinement pass (\textsc{Stage-0.5}) before cross-shell truncation.
+Equation~\eqref{eq:cross_shell_var} models one query-error term before calibration. Comparing calibrated hop scores also requires the true pairwise margin and the candidate-dependent errors in~\eqref{eq:exact_flip_criterion}. These observations motivate the representation used by \rquiver{}. At ingestion, \rquiver{} projects $\Lmod \to \Bball$, stores $(r_v,f_v)$ as unquantized FP32 scalars, isolates lateral graph edges inside isobathic shells $|\rho_v - \rho_u| \le \delta_\rho$, and applies an unquantized-query refinement pass (\textsc{Stage-0.5}) before cross-shell truncation.
 
 \subsection{Hyperbolic Vamana Pathologies: Occlusion, Wells, and Bias}
 \label{subsec:vamana_pathologies}
 
-Even with exact geodesic distances, standard single-metric {Vamana} construction~\cite{subramanya2019diskann} exhibits severe topological degeneration in $\Bball$ because negative curvature bends geodesics toward the origin.
+An interior neighbor can suppress many candidates under geodesic {Vamana} pruning~\cite{subramanya2019diskann}. The inner-ball bound below is sufficient for occlusion at every angle. The same-shell calculation specializes to an origin neighbor.
 
 \begin{theorem}[Radial Occlusion Bound, Angular Escape Condition, and Intercept Bias]
 \label{thm:vamana_pathologies}
@@ -162,7 +162,7 @@ Consider same-shell candidates $x,y$ with weight $W=W(r_q,r)>0$, common $\alpha=
 Subtracting~\eqref{eq:tangent_inner} for $x,y$ cancels the axial term. Applying $\Var(X-Y)=\Var(X)+\Var(Y)-2\Cov(X,Y)$ gives $W^2V_g$ for global proxy-error variance and $W^2\beta_{q,c}^2\beta^2V_r$ for residual proxy-error variance. Uniform ranks give each cone member admission probability $B/N_c(L)$. Summing indicators over its $k_c(L)$ true neighbors proves Claim~(2).
 \end{proof}
 
-On synthetic {Clustered-Narrow}, increasing $L$ from $256$ to $2{,}048$ at $B=128$ reduces global-code recall from $34.22\%$ to $27.80\%$. The four-stage audit in \S\ref{subsec:eval_synthetic} measures beam retention and rerank admission directly. Tangent encoding raises recall to $99.385\%$ at $L=256$, $99.80\%$ at $L=384$, and $99.945\%$ peak. It maps residual normalization~\cite{jegou2011pq} into the existing 2-bit bitplanes. Equation~\eqref{eq:mnr_recovery} identifies the pairwise covariance and tangent scale governing this representation.
+On synthetic {Clustered-Narrow}, increasing $L$ from $256$ to $2{,}048$ at $B=128$ reduces global-code recall from $34.22\%$ to $27.80\%$. The four-stage audit in \S\ref{subsec:eval_synthetic} measures beam retention and rerank admission directly. The full residual-code configuration reaches $99.385\%$ at $L=256$, $99.80\%$ at $L=384$, and $99.945\%$ peak. It maps residual normalization~\cite{jegou2011pq} into the existing 2-bit bitplanes. By~\eqref{eq:mnr_recovery}, tangent codes improve the pairwise MNR exactly when $V_g>(\beta_{q,c}\beta)^2V_r$.
 
 \subsection{Strong Convexity and Closed-Form Radial Minimization}
 \label{subsec:geodesic_apex}
@@ -197,7 +197,7 @@ Differentiating $g_\gamma(\rho)$ twice yields $g_\gamma''(\rho) = g_\gamma(\rho)
 Setting $g_\gamma'(\rho) = \cosh\rho_q\sinh\rho - \gamma\sinh\rho_q\cosh\rho = 0$ gives $\tanh\rho = \gamma\tanh\rho_q$ for $\gamma > 0$ and boundary minimum $\rho^* = 0$ for $\gamma \le 0$; clamping follows by strict convexity.
 \end{proof}
 
-Unlike Euclidean space, for a coarse routing cone at $\gamma = 0.7$ and a deep query at $\rho_q = 4.0$, the closest point along ray $\mu_a$ bends inward to $\rho^* \approx 0.87$, while on hollow datasets such as {Cohere-1M} ($\rho_{0.01} = 1.44$), clamping to $[\rho_{\min}, \rho_{\max}]$ avoids targeting empty interior shells.
+Unlike Euclidean space, for a coarse routing cone at $\gamma = 0.7$ and a deep query at $\rho_q = 4.0$, the closest point along ray $\mu_a$ bends inward to $\rho^* \approx 0.87$, while on hollow datasets such as {Cohere-1M} (database $\rho_{0.01}=1.45$), clamping to $[\rho_{\min}, \rho_{\max}]$ avoids targeting empty interior shells.
 
 \subsection{Deterministic Asymmetric De-Biasing, CJ-Gate, and Sketch Variance}
 \label{subsec:asym_cj}
@@ -225,7 +225,7 @@ Let $\hat{u}_v$ be the two-level {SM} vector of $u_v \in \Sunit$ with Pythagorea
     = 2 r_q r_v f_q f_v \sqrt{\frac{\kappa_{\mathrm{SM}}}{D}}\,\tilde{\beta}(q, v).
     \label{eq:cj_sigma}
   \end{equation}
-  Using $\beta_v^2$ in place of $\beta_{q,c}\beta_v$ underestimates $\sigma_P(q, v)$ by factor $\beta_{q,c} / \beta_v$ on off-axis queries (up to $5.49\times$ when $\alpha_v = 0.995, \alpha_{q,c} = 0.84$).
+  When $\beta_{q,c}>\beta_v>0$, using $\beta_v^2$ in place of $\beta_{q,c}\beta_v$ underestimates $\sigma_P(q,v)$ by a factor of $\beta_{q,c}/\beta_v$. For example, $\alpha_v=0.9951$ and $\alpha_{q,c}=0.84$ give a factor of $5.49$.
 
   \item \textbf{Binomial sketch variance ratio:}
   For a $B_s$-bit sign sketch ($B_s = 256$) at observed Hamming distance $H = B_s p$ with arcsine cosine estimate $\hat{\gamma}_{B_s}(H) = \cos(\pi p)$, first-order delta propagation of $H \sim \operatorname{Binomial}(B_s, p)$ yields standard deviation $\sigma_{\mathrm{sk}}(p) = \frac{\pi}{\sqrt{B_s}}\sin(\pi p)\sqrt{p(1 - p)}$, whose ratio reaches $2.306\times$ at $H=128$ ($\hat\gamma=0$) and $2.265\times$ at $H=115$ ($\hat\gamma\approx0.16$) relative to high-similarity neighbors ($H_{\mathrm{ref}} = 48, \hat{\gamma} \approx 0.83$)\ifpreprint\ (derivations in Appendix~\ref{app:tangent_cone})\fi.

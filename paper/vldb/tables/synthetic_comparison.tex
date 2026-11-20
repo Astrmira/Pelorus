@@ -4,6 +4,7 @@
 \textbf{Dataset} & \textbf{Method} & \textbf{$M/L_c$} & \textbf{\shortstack{Build\\32T (s)}} & \textbf{\shortstack{Peak\\Rec@10}} & \textbf{$\ge90\%$} & \textbf{$\ge95\%$} & \textbf{$\ge98\%$} & \textbf{$\ge99\%$} & \textbf{$\ge99.5\%$} & \textbf{\shortstack{p99 (ms)\\at $99\%$}} \\
 \midrule
 Uniform-Narrow & Pelorus & 16/128 & 46.8 & 64.735\% & \missing & \missing & \missing & \missing & \missing & \missing \\
+ & Pelorus (32/256) & 32/256 & 147.5 & 95.285\% & 65 & 54 & \missing & \missing & \missing & \missing \\
  & HDB FP32 flat & 32/256 & 478.2 & 92.170\% & 18 & \missing & \missing & \missing & \missing & \missing \\
  & Faiss centered IP & 32/256 & 311.3 & 29.860\% & \missing & \missing & \missing & \missing & \missing & \missing \\
  & Milvus centered IP & 32/256 & 573.6 & 46.445\% & \missing & \missing & \missing & \missing & \missing & \missing \\
@@ -31,6 +32,7 @@ Clustered-Wide & Pelorus & 16/128 & 19.4 & 99.995\% & 4,113 & 3,572 & 3,141 & 2,
 \textbf{Dataset} & \textbf{Method} & \textbf{$\ge90\%$} & \textbf{$\ge95\%$} & \textbf{$\ge98\%$} & \textbf{$\ge99\%$} & \textbf{$\ge99.5\%$} \\
 \midrule
 Uniform-Narrow & Pelorus & \missing & \missing & \missing & \missing & \missing \\
+ & Pelorus (32/256) & 1,202 & 1,202 & \missing & \missing & \missing \\
  & HDB FP32 flat & 288 & \missing & \missing & \missing & \missing \\
  & Faiss centered IP & \missing & \missing & \missing & \missing & \missing \\
  & Milvus centered IP & \missing & \missing & \missing & \missing & \missing \\

@@ -5,23 +5,22 @@
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{pelorus_execution.png}
-  \caption{Header-first query execution at $D=768$. (a)~One $4$\,KiB page contains 16 records, each with a 64\,B header and 192\,B bitplanes. (b)~Radial and sketch gates precede full bitplane reads, with residual vertices bypassing the sketch gate. The skip rate and kernel annotations use the {Cohere-1M} measurements. (c)~Asymmetric projection precedes adaptive rerank admission and cold-vector FP64 evaluation. The score curve is schematic. \textsc{Stage-0.5} improves $99.5\%$-recall {Cohere} QPS by $58.2\%$ in the controlled ablation. The measured $+63.7\%$ ({Cohere}, $99.5\%$ recall) and $+76.5\%$ ({MERU}, $99\%$ recall) gains combine \textsc{CJ-Gate} with stabilized sketching.}
+  \caption{Header-first execution at $D=768$. (a)~Sixteen records share a $4$\,KiB page. (b)~The header test precedes bitplane reads. The rejection rate is from 32 traced {Cohere-1M} queries. (c)~\textsc{Stage-0.5} gains compare 1T throughput with projection on and off on the same split-array path at each recall target. The admission curve is schematic.}
   \label{fig:execution_overview}
 \end{figure*}
 
-Figure~\ref{fig:execution_overview} follows a query from page translation to final reranking. On million-scale hyperbolic graphs, achieving $99\%$ Recall@10 at beam width $L \in [128, 256]$ expands $300\text{--}350$ vertices and evaluates $4{,}500\text{--}5{,}800$ candidate neighbors per query, while reading only $B \in [64, 128]$ cold FP32 vectors during final reranking.
-End-to-end latency is therefore governed by random-access {DTLB} walks, cache-line traffic during neighbor expansion, and 2-bit bitplane population counts.
+Figure~\ref{fig:execution_overview} follows a query from header lookup to reranking. Representative million-point runs at $L=128$--$256$ expand $300$--$350$ vertices and score $4{,}500$--$5{,}800$ neighbors. For a starting rerank budget of 64 or 128, the adaptive gate can admit additional candidates. Cold-vector traffic therefore depends on both the gate and the storage format.
 Query-private scratch buffers are reset by generation stamps and reused across requests. Candidate scoring depends on the current query and index state.
 
-\subsection{Single-Page Co-Location Avoiding Cross-Array DTLB Walks}
+\subsection{Single-Page Co-Location of Headers and Bitplanes}
 \label{subsec:colocated_page}
 
 In conventional Structure-of-Arrays ({SoA}) engines, polar headers ($32$\,MB at $N=10^6$) and 2-bit bitplanes ($192$\,MB at $D=768$) occupy separate contiguous arrays hundreds of megabytes apart in virtual memory (whereas disk-block reorderers~\cite{wang2024starling} and neighbor-embedded quantizers~\cite{gou2025symphonyqg} either require graph-isomorphism renumbering or duplicate codes across edges).
-Because x86-64 cores provide only $64\text{--}96$ L1 {DTLB} entries and $1{,}024\text{--}3{,}072$ L2 {DTLB} entries for $4$\,KiB pages, $5{,}500$ random neighbor hops across a $224$\,MB working set miss the {DTLB} on nearly every hop---forcing two independent page-table walks per candidate under {SoA} (one for metadata, a second for bitplanes).
+Separate header and bitplane arrays can require two address translations for the same vertex. Co-location lets both accesses reuse a single translation. Section~\ref{subsec:eval_storage} measures the effect of page packing on throughput and RSS.
 
 \begin{table}[t]
   \centering
-  \caption{Hardware-page-aligned $4096$\,B \texttt{HotSmPage} layout with power-of-two per-vertex record stride $S_{\mathrm{rec}} = \operatorname{next\_pow2}(64 + 16\lceil D/64\rceil)$\,B (shown at $D=768$: $S_{\mathrm{rec}} = 256$\,B, $K = 16$ vertices/page). Resolving the $64$\,B \texttt{HotSmHeader} translates the entire vertex record on the identical $4$\,KiB OS page.}
+  \caption{Hardware-page-aligned $4096$\,B \texttt{HotSmPage} layout with power-of-two per-vertex record stride $S_{\mathrm{rec}} = \operatorname{next\_pow2}(64 + 16\lceil D/64\rceil)$\,B (shown at $D=768$: $S_{\mathrm{rec}} = 256$\,B, $K = 16$ vertices/page). The complete record fits within one $4$\,KiB virtual page.}
   \label{tab:hot_sm_page}
   \small
   \setlength{\tabcolsep}{5pt}
@@ -40,13 +39,17 @@ Because x86-64 cores provide only $64\text{--}96$ L1 {DTLB} entries and $1{,}024
 Table~\ref{tab:hot_sm_page} shows our page-co-located \texttt{HotSmPage} layout:
 each vertex occupies a power-of-two record of $S_{\mathrm{rec}} = \operatorname{next\_pow2}(64 + 16\lceil D/64\rceil)$ bytes ($256$\,B at $D=512, 768$ packing $K = 16$ vertices/page; $512$\,B at $D=1536$ packing $K = 8$ vertices/page; $128$\,B at $D=20$ packing $K = 32$ vertices/page, supporting up to $D = 16{,}128$ within one $4$\,KiB page).
 Because $S_{\mathrm{rec}}$ divides $4096$ evenly ($\text{page\_id} = \text{vid} / K$, $\text{slot} = \text{vid} \bmod K$), every vertex's 64-byte \texttt{HotSmHeader} (\texttt{PolarNodeMeta} + \texttt{SymSketch256} in cache line~0) and its complete 2-bit {SM} bitplanes reside contiguously inside a single $4096$-byte OS page.
-Once hardware resolves the virtual-to-physical translation for \texttt{HotSmHeader} at $\text{base} + S_{\mathrm{rec}} \cdot \text{slot}$ (supported up to $D \le 16{,}128$), any subsequent bitplane reads (\texttt{0x40..0xFF} at $D=768$) share the \emph{exact same $4$\,KiB virtual-page translation}, avoiding cross-array secondary page-table walks per accessed vertex record.
+At $D=768$, bitplane offsets \texttt{0x40..0xFF} use the same virtual page number as the header.
 
+
+In the compact variant a page holds $K=\lfloor4096/(64+s)\rfloor$ vertices for signature size $s=16\lceil D/64\rceil$ bytes. Headers fill the first $64K$ bytes in slot order. Slot $i$ has header offset $64i$ and signature offset $64K+si$, so both lie in the same page.
+
+At $D=384$ and $1024$, the default slots round $160$ to $256$ and $320$ to $512$ bytes, leaving $37.5\%$ of each slot empty. At $D=512$, $192$ bytes occupy a $256$-byte slot. The compact layout fits 25, 12 and 21 vertices per page at these dimensions, respectively. At $D=768$ both layouts fit 16. For low-dimensional FP32 navigation, traversal and reranking can instead share the original coordinates and omit directional pages.
 \subsection{Variance-Stabilized Two-Level Beam Filtering (\texttt{SymSketch256})}
 \label{subsec:symsketch}
 
 Even within one $4$\,KiB page, fetching full 2-bit {SM} bitplanes ($192$\,B = $3$ cache lines at $D=768$; $384$\,B = $6$ cache lines at $D=1536$) for every unvisited neighbor incurs unnecessary memory traffic once the beam tightens around $q$.
-\rquiver{} first prefetches only the single 64-byte \texttt{HotSmHeader} cache line (consuming just one hardware Line Fill Buffer entry per neighbor) and executes a two-stage gate against the current $L$-th beam bound $\theta_{\mathrm{beam}}$:
+\rquiver{} prefetches the 64-byte \texttt{HotSmHeader}. Once the beam is full, the configured header test compares against its $L$-th score $\theta_{\mathrm{beam}}$. The sketch-enabled path incorporates the radial term in its score.
 \begin{enumerate}
   \item \textbf{Stage-1a (Exact Radial Lower-Bound Gate, $0$ extra cache lines):}
   Using $(r_v, f_v)$ from \texttt{HotSmHeader} (\texttt{0x00..0x1F}), if $P_{\mathrm{rad}}(r_q, r_v) = (r_q - r_v)^2 f_q f_v > \theta_{\mathrm{beam}}$ (Proposition~\ref{prop:geodesic_apex}(1)), $v$ is discarded by the lossless radial bound. \ifpreprint FP32 header perturbations follow Appendix~\ref{app:scalar_rounding}.\fi
@@ -57,7 +60,7 @@ Even within one $4$\,KiB page, fetching full 2-bit {SM} bitplanes ($192$\,B = $3
   Forming the variance-stabilized optimistic cosine bound $\hat{\gamma}_{\mathrm{upper}} = \min(1, \hat{\gamma}_{256} + \Delta_0 \cdot \rho_{\mathrm{std}}(H))$ yields optimistic proxy $\widehat{P}_{\mathbb{B}}^{\mathrm{opt}}(q, v) = R(r_q, r_v) + W(r_q, r_v)(1 - \hat{\gamma}_{\mathrm{upper}})$; whenever $\widehat{P}_{\mathbb{B}}^{\mathrm{opt}}(q, v) > \theta_{\mathrm{beam}}$ (for non-residual vertices once the beam fills), $v$ is pruned without prefetching or reading its trailing bitplane cache lines.
 \end{enumerate}
 Scaling the sketch margin by $\rho_{\mathrm{std}}(H)$ keeps tight filtering ($1.0\times$) for high-similarity neighbors ($H \le 48$) while automatically widening to $2.265\times$ at $H=115$ and a maximum of $2.306\times$ at $H=128$ to prevent premature pruning on moderate-angle manifolds.
-In our controlled three-seed ablation on {Cohere-1M}, Stage-1a and \texttt{SymSketch256} skip $57.6\%$ of full bitplane loads, raising single-thread $99\%$-recall QPS from $1{,}752$ ({SoA}) to $1{,}909$ (\texttt{HotSmPage}) and $2{,}071$ (\texttt{HotSmPage} + \texttt{SymSketch256}, $+18.2\%$ total).
+On {Cohere-1M}, co-location raises single-thread throughput at $99\%$ recall from $1{,}701$ to $1{,}850$\,QPS. The sketch-enabled path reaches $2{,}003$\,QPS.
 
 \subsection{3-to-2 Carry-Save AVX2 Bitplane Kernel}
 \label{subsec:csa_kernel}
@@ -107,7 +110,7 @@ Once beam search converges to a pool $\mathcal{P}$ of size $L$, fetching all $L$
 \rquiver{} executes a three-step tail pipeline:
 \begin{enumerate}
   \item \textbf{L1-Bounded \textsc{Stage-0.5} Asymmetric Re-Scoring:}
-  By Theorem~\ref{thm:conformal_flip}(2) and Proposition~\ref{prop:asym_cj_gate}(1), evaluating $\hat{\gamma}_{\mathrm{asym}}(u_q, u_v) = \operatorname{clip}_{[-1,1]}(\langle u_q, \hat{u}_v\rangle / \sigma_v^2)$ with unquantized $u_q$ and $(a_v, \delta_v, \sigma_v)$ already resident in \texttt{PolarNodeMeta} eliminates both cross-shell query-noise non-cancellation ($e_q = 0$) and norm-inflation bias.
+  For a real-valued query direction, the 2-bit query-error term in~\eqref{eq:cross_shell_var} vanishes. We use the candidate scalars $(a_v,\delta_v,\sigma_v)$ in \texttt{PolarNodeMeta} to evaluate $\hat{\gamma}_{\mathrm{asym}}=\operatorname{clip}_{[-1,1]}(\langle u_q,\hat u_v\rangle/\sigma_v^2)$. Before clipping, the projection recovers the component along $u_v$ exactly and retains the orthogonal residual in~\eqref{eq:orth_proj_asym}.
   Let $S_{\mathrm{tot}} = \sum_{i=1}^D u_{q,i}$ and define three masked signed-query subset sums over candidate bitplanes $(s_v, m_v)$: positive-sign sum $S_+ = \sum_{i : s_{v,i} = 1} u_{q,i}$, strong-candidate sum $S_h = \sum_{i : m_{v,i} = 1} u_{q,i}$, and joint positive-strong sum $S_{+h} = \sum_{i : s_{v,i} = 1 \land m_{v,i} = 1} u_{q,i}$ (equivalently expressed via unsigned $|u_{q,i}|$ and sign-agreement masks $\mathbb{I}[s_{q,i}=s_{v,i}]$).
   Then $\langle u_q, \hat{u}_v\rangle$ reduces algebraically to
   \begin{equation}
@@ -130,3 +133,5 @@ Once beam search converges to a pool $\mathcal{P}$ of size $L$, fetching all $L$
   Near $\|v\|_2 \to 1/\sqrt{c}$, single-precision evaluation of $1 - c\|v\|_2^2$ loses mantissa precision.
   \rquiver{} prefetches cold vector $v_{(j+2)}$ while widening $q$ and $v_{(j)}$ via \texttt{vcvtps2pd} into 8-wide {AVX-512F} (or 4-wide {AVX2+FMA}) FP64 accumulators, computing exact $P_{\mathbb{B}}(q, v_{(j)})$ in double precision and invoking $\asinh$~\eqref{eq:proxy_to_geodesic} only on the final $k = 10$ results.
 \end{enumerate}
+
+Cold data can reside in RAM or on NVMe. Navigation still accesses in-memory pages and adjacency. The SSD backend batches direct reads through \texttt{io\_uring} and maintains a bounded cache and in-flight buffer pool. FP32, Cartesian FP16, centered SQ8, centered SQ4 direction with FP64 radius, and FP16 direction with FP64 radius share the graph. Double-precision arithmetic operates on the decoded coordinates. Rounding during storage can change their distances from those in the source embedding (Table~\ref{tab:depth_precision}).

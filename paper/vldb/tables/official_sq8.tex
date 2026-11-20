@@ -1,0 +1,21 @@
+\begin{table}[!htbp]
+ \centering
+ \caption{MERU-1M with official SQ8 HNSW indices ($M/L_c=16/128$). For each target and thread count, $ef$ and $B$ are selected on 2,000 validation queries. Cells report outcomes on 10,000 test queries.}
+ \label{tab:official_sq8}
+ \footnotesize
+ \setlength{\tabcolsep}{2.4pt}
+ \begin{tabular}{@{}lrrrrrrr@{}}
+ \toprule
+ & Target & \multicolumn{3}{c}{One thread} & \multicolumn{3}{c}{24 threads}\\
+ \cmidrule(lr){3-5}\cmidrule(lr){6-8}
+ Engine & (\%) & R@10 (\%) & QPS & $p_{99}$ (ms) & R@10 (\%) & QPS & $p_{99}$ (ms)\\
+ \midrule
+Faiss & 98 & 98.463 & 1,961 & 0.74 & 98.463 & 41,457 & 0.88 \\
+ & 99 & 99.119 & 1,220 & 1.07 & 99.119 & 26,786 & 1.28 \\
+ & 99.5 & 99.578 & 973 & 1.37 & 99.578 & 20,805 & 1.65 \\
+Milvus & 98 & 98.268 & 117 & 12.63 & 98.200 & 1,162 & 32.81 \\
+ & 99 & 99.405 & 73 & 20.75 & 99.716 & 587 & 115.23 \\
+ & 99.5 & 99.716 & 52 & 28.72 & 99.716 & 595 & 118.12 \\
+ \bottomrule
+ \end{tabular}
+\end{table}
